@@ -26,7 +26,7 @@
 package client
 
 import (
-	"crypto/asymmetric"
+	"github.com/MJKWoolnough/crypto-asymmetric"
 	"encoding/binary"
 	"flag"
 	"github.com/MJKWoolnough/webserver/client/types"
