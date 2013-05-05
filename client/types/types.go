@@ -27,7 +27,7 @@ package types
 
 import (
 	"crypto/rsa"
-	"github.com/MJKWoolnough/crypto/asymmetric"
+	"github.com/MJKWoolnough/crypto-asymmetric"
 	"time"
 )
 
