@@ -50,13 +50,8 @@ const (
 // Precompiled regex for an E-mail Address
 var Email *regexp.Regexp
 
-type number interface {
-	data()    interface{}
-	inRange() bool
-}
-
 type Bool struct {
-	d, required bool
+	data, required bool
 }
 
 func NewBool(required bool) Bool {
@@ -64,52 +59,36 @@ func NewBool(required bool) Bool {
 }
 
 func (b Bool) Get() bool {
-	return b.d
+	return b.data
 }
 
 type Int struct {
-	d, min, max int
+	data, min, max int
 }
 
 func NewInt(min, max int) Int {
 	return Int { 0, min, max }
 }
 
-func (i *Int) data() interface{} {
-	return &i.d
-}
-
-func (i Int) inRange() bool {
-	return i.d >= i.min && i.d <= i.max
-}
-
 func (i Int) Get() int {
-	return i.d
+	return i.data
 }
 
 type Float struct {
-	d, min, max float64
+	data, min, max float64
 }
 
 func NewFloat(min, max float64) Float {
 	return Float { 0, min, max }
 }
 
-func (f *Float) data() interface{} {
-	return &f.d
-}
-
-func (f Float) inRange() bool {
-	return f.d >= f.min && f.d <= f.max
-}
-
 func (f Float) Get() float64 {
-	return f.d
+	return f.data
 }
 
 type String struct {
-	d string
-	match []string
+	data string
+	equal []string
 	regex *regexp.Regexp
 }
 
@@ -118,7 +97,7 @@ func NewString(equals []string, regex *regexp.Regexp) String {
 }
 
 func (s String) Get() string {
-	return s.d
+	return s.data
 }
 
 type errType int8
@@ -161,14 +140,19 @@ func init() {
 }
 
 // Parses the request for the wanted fields and does validation.
-func Validate(i interface{}, r *http.Request) error {
-	r.FormValue("")
+func Validate(i *interface{}, r *http.Request) error {
+	if r.Form == nil {
+		r.FormValue("")
+	}
 	v := reflect.ValueOf(i)
+	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		v = v.Elem()
+	}
 	var errors Errors = make(map[string]errType)
 	if v.Kind() == reflect.Struct {
 		for j := 0; j < v.NumField(); j++ {
 			fieldV := v.Field(j)
-			if !fieldV.CanInterface() {
+			if !fieldV.CanInterface() || !fieldV.CanSet() {
 				continue
 			}
 			fieldT := v.Type().Field(j)
@@ -176,8 +160,10 @@ func Validate(i interface{}, r *http.Request) error {
 			if fieldT.Tag != "" {
 				name = string(fieldT.Tag)
 			}
-			data := fieldV.Interface()
-			err := process(r, name, data)
+			data, err := process(r, name, fieldV.Interface())
+			if data != nil {
+				fieldV.Set(reflect.ValueOf(data))
+			}
 			if err != noError {
 				errors[name] = err
 			}
@@ -189,7 +175,7 @@ func Validate(i interface{}, r *http.Request) error {
 		for _, key := range v.MapKeys() {
 			name := key.String()
 			data := v.MapIndex(key).Interface()
-			err := process(r, name, data)
+			_, err := process(r, name, &data)
 			if err != noError {
 				errors[name] = err
 			}
@@ -203,73 +189,119 @@ func Validate(i interface{}, r *http.Request) error {
 	return errors
 }
 
-func process(r *http.Request, name string, data interface{}) errType {
+func process(r *http.Request, name string, data interface{}) (interface{}, errType) {
 	var value string
 	if v, ok := r.Form[name]; !ok {
-		return FieldNotFound
+		return nil, FieldNotFound
 	} else if len(v) == 0 {
-		return FieldNotFound
+		return nil, FieldNotFound
 	} else {
 		value = v[0]
 	}
 	
-	switch d := data.(type) {
-		case *int8, *uint8, *int16, *uint16, *int32, *uint32, *int64, *uint64, *int, *uint, *float32, *float64, number:
-			var v interface{}
-			n, ok := d.(number); 
-			if ok {
-				v = n.data()
-			} else {
-				v = d
+	switch d := (data).(type) {
+		case int8:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case uint8:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case int16:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case uint16:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case int32:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case uint32:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case int64:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case uint64:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case int:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case uint:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case Int:
+			_, err := fmt.Sscan(value, &d.data)
+			if e := checkErr(err); e != noError {
+				return d, e
 			}
-			_, err := fmt.Sscan(value, v)
-			if e, ok := err.(*strconv.NumError); ok {
-				if e.Err == strconv.ErrRange {
-					return FieldIntTooLarge
-				} else if e.Err == strconv.ErrSyntax {
-					return FieldWrongType
-				}
+			if d.data < d.min || d.data > d.max {
+				return d, FieldNotMatch
 			}
-			if ok {
-				if n.inRange() {
-					return FieldNotMatch
-				}
+			return d, noError
+		case float32:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case float64:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
+		case Float:
+			_, err := fmt.Sscan(value, &d.data)
+			if e := checkErr(err); e != noError {
+				return d, e
 			}
-			return noError
-		case *string:
-			*d = value
-			return noError
-		case *String:
-			d.d = value
-			if d.match != nil {
-				for _, match := range d.match {
-					if value == match {
-						return noError
+			if d.data < d.min || d.data > d.max {
+				return d, FieldNotMatch
+			}
+			return d, noError
+		case string:
+			return value, noError
+		case String:
+			d.data = value
+			if d.regex == nil && d.equal == nil {
+				return d, noError
+			}
+			if d.equal != nil {
+				for _, equal := range d.equal {
+					if value == equal {
+						return d, noError
 					}
 				}
-			}
-			if d.regex == nil {
-				if d.match == nil {
-					return FieldNotMatch
+				if d.regex == nil {
+					return d, FieldNotEqual
 				}
-				return FieldNotEqual
-			} else {
+			}
+			if d.regex != nil {
 				if d.regex.Match([]byte(value)) {
-					return noError
+					return d, noError
+				}
+				if d.equal == nil {
+					return d, FieldNotMatch
 				}
 			}
-			return FieldNotMatchEqual
-		case *bool:
+			return d, FieldNotMatchEqual
+		case bool:
 			value = strings.ToLower(value)
-			*d = value != "" && value != "false" && value != "0" && value != "off" && value != "no" && value != "\000"
-			return noError
-		case *Bool:
+			d = value != "" && value != "false" && value != "0" && value != "off" && value != "no" && value != "\000"
+			return d, noError
+		case Bool:
 			value = strings.ToLower(value)
-			d.d = value != "" && value != "false" && value != "0" && value != "off" && value != "no" && value != "\000"
-			if d.d != d.required {
-				return FieldNotEqual
+			d.data = value != "" && value != "false" && value != "0" && value != "off" && value != "no" && value != "\000"
+			if d.data != d.required {
+				return d, FieldNotEqual
 			}
-			return noError
+			return d, noError
 	}
-	return InputWrongType
+	return nil, InputWrongType
+}
+
+func checkErr(err error) errType {
+	if e, ok := err.(*strconv.NumError); ok {
+		if e.Err == strconv.ErrRange {
+			return FieldIntTooLarge
+		} else if e.Err == strconv.ErrSyntax {
+			return FieldWrongType
+		}
+	}
+	return noError
 }
