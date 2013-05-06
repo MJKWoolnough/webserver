@@ -170,14 +170,16 @@ func Validate(i *interface{}, r *http.Request) Errors {
 		}
 	} else if v.Kind() == reflect.Map {
 		if v.Type().Key().Kind() != reflect.String {
-			return InputWrongKey
+			errors[""] = InputWrongKey
+			return errors
 		}
 		for _, key := range v.MapKeys() {
 			elm := v.MapIndex(key)
 			if !elm.CanInterface() || !elm.CanSet() {
 				continue
 			}
-			data, err := process(r, key.String(), v.MapIndex(key).Interface())
+			name := key.String()
+			data, err := process(r, name, v.MapIndex(key).Interface())
 			if data != nil {
 				elm.Set(reflect.ValueOf(data))
 			}
@@ -186,7 +188,8 @@ func Validate(i *interface{}, r *http.Request) Errors {
 			}
 		}
 	} else {
-		return InputWrongType
+		errors[""] = InputWrongKey
+		return errors
 	}
 	if len(errors) == 0 {
 		return nil
