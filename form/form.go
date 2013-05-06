@@ -173,9 +173,14 @@ func Validate(i *interface{}, r *http.Request) error {
 			return InputWrongKey
 		}
 		for _, key := range v.MapKeys() {
-			name := key.String()
-			data := v.MapIndex(key).Interface()
-			_, err := process(r, name, &data)
+			elm := v.MapIndex(key)
+			if !elm.CanInterface() || !elm.CanSet() {
+				continue
+			}
+			data, err := process(r, key.String(), v.MapIndex(key).Interface())
+			if data != nil {
+				elm.Set(reflect.ValueOf(data))
+			}
 			if err != noError {
 				errors[name] = err
 			}
