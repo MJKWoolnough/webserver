@@ -28,7 +28,7 @@ Precompiled regex for an E-mail Address
 #### func  Validate
 
 ```go
-func Validate(i interface{}, r *http.Request) error
+func Validate(i *interface{}, r *http.Request) error
 ```
 Parses the request for the wanted fields and does validation.
 

@@ -140,7 +140,7 @@ func init() {
 }
 
 // Parses the request for the wanted fields and does validation.
-func Validate(i *interface{}, r *http.Request) error {
+func Validate(i *interface{}, r *http.Request) Errors {
 	if r.Form == nil {
 		r.FormValue("")
 	}
