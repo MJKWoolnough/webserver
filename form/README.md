@@ -25,13 +25,6 @@ var Email *regexp.Regexp
 ```
 Precompiled regex for an E-mail Address
 
-#### func  Validate
-
-```go
-func Validate(i *interface{}, r *http.Request) error
-```
-Parses the request for the wanted fields and does validation.
-
 #### type Bool
 
 ```go
@@ -59,6 +52,13 @@ type Errors map[string]errType
 ```
 
 Map for returned errors
+
+#### func  Validate
+
+```go
+func Validate(i *interface{}, r *http.Request) Errors
+```
+Parses the request for the wanted fields and does validation.
 
 #### func (Errors) Error
 
