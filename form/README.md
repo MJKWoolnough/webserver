@@ -20,11 +20,6 @@ const (
 ```
 Various defined errors
 
-```go
-var Email *regexp.Regexp
-```
-Precompiled regex for an E-mail Address
-
 #### type Bool
 
 ```go
@@ -45,6 +40,12 @@ func NewBool(required bool) Bool
 func (b Bool) Get() bool
 ```
 
+#### func (Bool) String
+
+```go
+func (b Bool) String() string
+```
+
 #### type Errors
 
 ```go
@@ -56,7 +57,7 @@ Map for returned errors
 #### func  Validate
 
 ```go
-func Validate(i *interface{}, r *http.Request) Errors
+func Validate(i interface{}, r *http.Request) Errors
 ```
 Parses the request for the wanted fields and does validation.
 
@@ -86,6 +87,12 @@ func NewFloat(min, max float64) Float
 func (f Float) Get() float64
 ```
 
+#### func (Float) String
+
+```go
+func (f Float) String() string
+```
+
 #### type Int
 
 ```go
@@ -106,6 +113,12 @@ func NewInt(min, max int) Int
 func (i Int) Get() int
 ```
 
+#### func (Int) String
+
+```go
+func (i Int) String() string
+```
+
 #### type String
 
 ```go
@@ -113,6 +126,14 @@ type String struct {
 }
 ```
 
+
+```go
+var (
+	Email       *regexp.Regexp
+	NotEmptyStr String
+)
+```
+Precompiled regexes
 
 #### func  NewString
 
@@ -124,4 +145,10 @@ func NewString(equals []string, regex *regexp.Regexp) String
 
 ```go
 func (s String) Get() string
+```
+
+#### func (String) String
+
+```go
+func (s String) String() string
 ```

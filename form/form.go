@@ -47,8 +47,11 @@ const (
 	noError
 )
 
-// Precompiled regex for an E-mail Address
-var Email *regexp.Regexp
+// Precompiled regexes
+var (
+	Email *regexp.Regexp
+	NotEmptyStr String
+)
 
 type Bool struct {
 	data, required bool
@@ -60,6 +63,10 @@ func NewBool(required bool) Bool {
 
 func (b Bool) Get() bool {
 	return b.data
+}
+
+func (b Bool) String() string {
+	return fmt.Sprint(b.data)
 }
 
 type Int struct {
@@ -74,6 +81,10 @@ func (i Int) Get() int {
 	return i.data
 }
 
+func (i Int) String() string {
+	return fmt.Sprint(i.data)
+}
+
 type Float struct {
 	data, min, max float64
 }
@@ -84,6 +95,10 @@ func NewFloat(min, max float64) Float {
 
 func (f Float) Get() float64 {
 	return f.data
+}
+
+func (f Float) String() string {
+	return fmt.Sprint(f.data)
 }
 
 type String struct {
@@ -100,6 +115,10 @@ func (s String) Get() string {
 	return s.data
 }
 
+func (s String) String() string {
+	return s.data
+}
+
 type errType int8
 
 func (e errType) Error() string {
@@ -107,9 +126,9 @@ func (e errType) Error() string {
 		case FieldNotFound:
 			return "The requested field was not found"
 		case FieldNotEqual:
-			return "The field did not match the regular expression"
-		case FieldNotMatch:
 			return "The field did not equal the values given"
+		case FieldNotMatch:
+			return "The field did not match the regular expression"
 		case FieldNotMatchEqual:
 			return "The field did not equal the values given or match the regular expression"
 		case FieldWrongType:
@@ -128,6 +147,9 @@ func (e errType) Error() string {
 type Errors map[string]errType
 
 func (e Errors) Error() string {
+	if len(e) == 0 {
+		return ""
+	}
 	err := "The following errors were found: -"
 	for name, errT := range e {
 		err += fmt.Sprintf("\n%q: %q", name, errT.Error())
@@ -136,15 +158,17 @@ func (e Errors) Error() string {
 }
 
 func init() {
-	Email, _ = regexp.Compile("^[a-zA-Z0-9][a-zA-Z0-9_.-+]*@[a-zA-Z0-9.-]+.[a-zA-Z]{2,4}$")
+	Email, _ = regexp.Compile("^[a-zA-Z0-9][a-zA-Z0-9_.+-]*@[a-zA-Z0-9.-]+.[a-zA-Z]{2,4}$")
+	notEmpty, _ := regexp.Compile(".")
+	NotEmptyStr = String { "", nil, notEmpty }
 }
 
 // Parses the request for the wanted fields and does validation.
-func Validate(i *interface{}, r *http.Request) Errors {
+func Validate(i interface{}, r *http.Request) Errors {
 	if r.Form == nil {
 		r.FormValue("")
 	}
-	v := reflect.ValueOf(i)
+	v := reflect.ValueOf(&i)
 	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
