@@ -46,7 +46,9 @@ type static struct {
 }
 
 // NewStatic will generate a new static page from the given template and watch for updates.
-func NewStatic(input, output string) error {
+// If headfooter is true then the static page will also be updated when the special 'header'
+// and 'footer' templates are updated.
+func NewStatic(input, output string, headfooter bool) error {
 	s := static{input, output}
 	if err := s.update(); err != nil {
 		return err
@@ -54,7 +56,9 @@ func NewStatic(input, output string) error {
 	if err := watcher.Watch(input, s); err != nil {
 		return err
 	}
-	statics = append(statics, s)
+	if headfooter {
+		statics = append(statics, s)
+	}
 	return nil
 }
 

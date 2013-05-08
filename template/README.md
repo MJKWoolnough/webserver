@@ -23,10 +23,11 @@ Menu allows the menu list for the header to be set.
 #### func  NewStatic
 
 ```go
-func NewStatic(input, output string) error
+func NewStatic(input, output string, headfooter bool) error
 ```
 NewStatic will generate a new static page from the given template and watch for
-updates.
+updates. If headfooter is true then the static page will also be updated when
+the special 'header' and 'footer' templates are updated.
 
 #### func  NewTemplate
 
