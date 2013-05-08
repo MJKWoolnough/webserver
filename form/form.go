@@ -232,6 +232,9 @@ func process(r *http.Request, name string, data interface{}) (interface{}, errTy
 	}
 	
 	switch d := (data).(type) {
+		case fmt.Scanner:
+			_, err := fmt.Sscan(value, &d)
+			return d, checkErr(err)
 		case int8:
 			_, err := fmt.Sscan(value, &d)
 			return d, checkErr(err)
@@ -334,6 +337,7 @@ func checkErr(err error) errType {
 		} else if e.Err == strconv.ErrSyntax {
 			return FieldWrongType
 		}
+		return FieldWrongType
 	}
 	return noError
 }
