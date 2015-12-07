@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -10,22 +11,82 @@ import (
 	"sync"
 )
 
-func New() {
+type Proxy struct {
+	l net.Listener
 
+	mu          sync.RWMutex
+	hosts       map[string]io.Writer
+	defaultHost string
 }
 
-func startServer() {
-	l, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		return err
+func New(l net.Listener) *Proxy {
+	return &Proxy{
+		l:     l,
+		hosts: make(map[string]io.Writer),
 	}
+}
+
+func (p *Proxy) Update(name string, w io.Writer) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.hosts[name] = w
+	if p.defaultHost == "" {
+		p.defaultHost = name
+	}
+}
+
+func (p *Proxy) Default(name string) error {
+	if name == "" {
+		return ErrNoDefault
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, ok := p.hosts[name]; !ok {
+		return ErrNoDefault
+	}
+	p.defaultHost = name
+}
+
+func (p *Proxy) Remove(name string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.defaultHost == name {
+		return ErrNoRemoveDefault
+	}
+	delete(p.hosts, name)
+}
+
+func (p *Proxy) Start() error {
+	if p.defaultHost == "" {
+		ErrNoDefault
+	}
+	go p.run()
+}
+
+func (p *Proxy) run() error {
 	for {
-		c, err := l.Accept()
+		c, err := p.l.Accept()
 		if err != nil {
-			continue
+			if oe, ok := err.(*net.OpError); ok {
+				if oe.Temporary() {
+					continue
+				}
+			}
+			return err
 		}
-		go handleConn(c, false)
+		go p.handleConn(c, false)
 	}
+}
+
+func (p *Proxy) Run() error {
+	if p.defaultHost == "" {
+		ErrNoDefault
+	}
+	return p.run()
+}
+
+func (p *Proxy) Close() error {
+	return p.l.Close()
 }
 
 const MaxXHeaderSize = http.DefaultMaxHeaderBytes
@@ -37,11 +98,11 @@ var (
 
 var pool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, 1+8+4+MaxHeaderSize)
+		return make([]byte, 1+8+4+MaxHeaderSize+1)
 	},
 }
 
-func handleConn(c net.Conn, encrypted bool) {
+func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 	buf := pool.Get().([]byte)
 	defer pool.Put(buf)
 	defer c.Close()
@@ -52,29 +113,29 @@ func handleConn(c net.Conn, encrypted bool) {
 	if encrypted {
 		buf[0] = 1
 		hostname, readLength = readEncrypted(buf[1+8+4:])
-		if readLength == MaxHeaderSize {
-			c.Write(HeadersTooLarge)
-			c.Close()
-			return
-		}
 	} else {
 		buf[0] = 0
 		hostname, readLength = readHTTP(buf[1+8+4:])
-		if readLength == MaxHeaderSize {
-			c.Write(HeadersTooLarge)
-			c.Close()
-			return
-		}
 	}
-	buf = buf[:1+8+4+readLength]
+	if readLength == MaxHeaderSize {
+		c.Write(HeadersTooLarge)
+		return
+	}
 
 	nf := c.(interface {
 		File() (*os.File, error)
 	})
 	f, _ := nf.File()
 	binary.LittleEndian.PutUint64(buf[1:1+8], uint64(f.Fd()))
-	binary.LittleEndian.PutUint32(buf[1+8:1+8+4], uint32(len(buf)-(1+8+4)))
-	if !toHost(hostname, buf) {
+	binary.LittleEndian.PutUint32(buf[1+8:1+8+4], uint32(readLength))
+
+	p.mu.RLock()
+	h, ok := p.hosts[hostname]
+	if !ok {
+		h = p.hosts[p.defaultHost]
+	}
+	p.mu.RUnlock()
+	if _, err := h.Write(buf[:1+8+4+readLength]); err != nil {
 		f.Close()
 	}
 }
@@ -209,7 +270,8 @@ func readHTTP(buf []byte) (hostname string, readLength int) {
 	return
 }
 
-func toHost(hostname string, buf []byte) bool {
-	//get host
-	//send buf to host
-}
+// Errors
+var (
+	ErrNoDefault       = errors.New("default host empty")
+	ErrNoRemoveDefault = errors.New("cannot remove default host")
+)
