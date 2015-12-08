@@ -12,7 +12,8 @@ import (
 )
 
 type Proxy struct {
-	l net.Listener
+	l   net.Listener
+	ssl bool
 
 	mu          sync.RWMutex
 	hosts       map[string]io.Writer
@@ -22,6 +23,7 @@ type Proxy struct {
 func New(l net.Listener) *Proxy {
 	return &Proxy{
 		l:     l,
+		ssl:   false,
 		hosts: make(map[string]io.Writer),
 	}
 }
@@ -45,6 +47,7 @@ func (p *Proxy) Default(name string) error {
 		return ErrNoDefault
 	}
 	p.defaultHost = name
+	return nil
 }
 
 func (p *Proxy) Remove(name string) error {
@@ -54,13 +57,15 @@ func (p *Proxy) Remove(name string) error {
 		return ErrNoRemoveDefault
 	}
 	delete(p.hosts, name)
+	return nil
 }
 
 func (p *Proxy) Start() error {
 	if p.defaultHost == "" {
-		ErrNoDefault
+		return ErrNoDefault
 	}
 	go p.run()
+	return nil
 }
 
 func (p *Proxy) run() error {
@@ -74,13 +79,13 @@ func (p *Proxy) run() error {
 			}
 			return err
 		}
-		go p.handleConn(c, false)
+		go p.handleConn(c, p.ssl)
 	}
 }
 
 func (p *Proxy) Run() error {
 	if p.defaultHost == "" {
-		ErrNoDefault
+		return ErrNoDefault
 	}
 	return p.run()
 }
@@ -89,7 +94,7 @@ func (p *Proxy) Close() error {
 	return p.l.Close()
 }
 
-const MaxXHeaderSize = http.DefaultMaxHeaderBytes
+const MaxHeaderSize = http.DefaultMaxHeaderBytes
 
 var (
 	HeadersTooLarge = []byte("HTTP/1.0 413\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
@@ -112,10 +117,10 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 	)
 	if encrypted {
 		buf[0] = 1
-		hostname, readLength = readEncrypted(buf[1+8+4:])
+		hostname, readLength = readEncrypted(c, buf[1+8+4:])
 	} else {
 		buf[0] = 0
-		hostname, readLength = readHTTP(buf[1+8+4:])
+		hostname, readLength = readHTTP(c, buf[1+8+4:])
 	}
 	if readLength == MaxHeaderSize {
 		c.Write(HeadersTooLarge)
@@ -140,9 +145,9 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 	}
 }
 
-func readEncrypted(buf []byte) (hostname string, readLength int) {
+func readEncrypted(c net.Conn, buf []byte) (hostname string, readLength int) {
 	recordHeader := buf[:5]
-	_, err := io.ReadFull(c, dataHeader)
+	_, err := io.ReadFull(c, recordHeader)
 	if err != nil || recordHeader[0] == 0x80 {
 		return
 	}
@@ -223,7 +228,7 @@ func readEncrypted(buf []byte) (hostname string, readLength int) {
 					}
 					if nameType == 0 {
 						hostname = string(d[:nameLen])
-						break
+						break ExtLoop
 					}
 					d = d[nameLen:]
 				}
@@ -233,7 +238,7 @@ func readEncrypted(buf []byte) (hostname string, readLength int) {
 	return
 }
 
-func readHTTP(buf []byte) (hostname string, readLength int) {
+func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
 	var (
 		last int
 		char = make([]byte, 1, 1)
