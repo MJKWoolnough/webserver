@@ -16,7 +16,7 @@ type Proxy struct {
 	ssl bool
 
 	mu          sync.RWMutex
-	hosts       map[string]io.Writer
+	hosts       map[string]*net.UnixConn
 	defaultHost string
 }
 
@@ -24,14 +24,14 @@ func New(l net.Listener) *Proxy {
 	return &Proxy{
 		l:     l,
 		ssl:   false,
-		hosts: make(map[string]io.Writer),
+		hosts: make(map[string]*net.UnixConn),
 	}
 }
 
-func (p *Proxy) Update(name string, w io.Writer) {
+func (p *Proxy) Update(name string, c *net.UnixConn) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.hosts[name] = w
+	p.hosts[name] = c
 	if p.defaultHost == "" {
 		p.defaultHost = name
 	}
@@ -103,7 +103,7 @@ var (
 
 var pool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, 1+8+4+MaxHeaderSize+1)
+		return make([]byte, 8+4+MaxHeaderSize+1)
 	},
 }
 
@@ -116,11 +116,9 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 		readLength int
 	)
 	if encrypted {
-		buf[0] = 1
-		hostname, readLength = readEncrypted(c, buf[1+8+4:])
+		hostname, readLength = readEncrypted(c, buf[8+4:])
 	} else {
-		buf[0] = 0
-		hostname, readLength = readHTTP(c, buf[1+8+4:])
+		hostname, readLength = readHTTP(c, buf[8+4:])
 	}
 	if readLength == MaxHeaderSize {
 		c.Write(HeadersTooLarge)
@@ -131,8 +129,8 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 		File() (*os.File, error)
 	})
 	f, _ := nf.File()
-	binary.LittleEndian.PutUint64(buf[1:1+8], uint64(f.Fd()))
-	binary.LittleEndian.PutUint32(buf[1+8:1+8+4], uint32(readLength))
+	binary.LittleEndian.PutUint64(buf[:8], uint64(f.Fd()))
+	binary.LittleEndian.PutUint32(buf[8:8+4], uint32(readLength))
 
 	p.mu.RLock()
 	h, ok := p.hosts[hostname]
@@ -140,7 +138,7 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 		h = p.hosts[p.defaultHost]
 	}
 	p.mu.RUnlock()
-	if _, err := h.Write(buf[:1+8+4+readLength]); err != nil {
+	if _, err := h.Write(buf[:8+4+readLength]); err != nil {
 		f.Close()
 	}
 }
