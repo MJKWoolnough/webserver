@@ -3,28 +3,51 @@ package proxy
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"sync"
 )
 
+type file interface {
+	File() (*os.File, error)
+}
+
+type host struct {
+	sync.Mutex
+	*net.UnixConn
+}
+
+func (h *host) Transfer(buf []byte, c net.Conn) error {
+	f, err := c.(file).File()
+	if err != nil {
+		return err
+	}
+	length := make([]byte, 4)
+	binary.LittleEndian.PutUint32(length, uint32(len(buf)))
+	h.Lock()
+	defer h.Unlock()
+	if _, _, err = h.WriteMsgUnix(length, sycall.UnixRights(int(f.Fd())), nil); err != nil {
+		return err
+	}
+	_, err = h.Write(buf[4:])
+	return err
+}
+
 type Proxy struct {
-	l   net.Listener
-	ssl bool
+	l         net.Listener
+	encrypted bool
 
 	mu          sync.RWMutex
-	hosts       map[string]*net.UnixConn
+	hosts       map[string]host
 	defaultHost string
 }
 
-func New(l net.Listener) *Proxy {
+func New(l net.Listener, encrypted bool) *Proxy {
 	return &Proxy{
-		l:     l,
-		ssl:   false,
-		hosts: make(map[string]*net.UnixConn),
+		l:         l,
+		encrypted: encrypted,
+		hosts:     make(map[string]host),
 	}
 }
 
@@ -94,7 +117,7 @@ func (p *Proxy) Close() error {
 	return p.l.Close()
 }
 
-const MaxHeaderSize = http.DefaultMaxHeaderBytes
+const MaxHeaderSize = 1 << 13 // 8KB
 
 var (
 	HeadersTooLarge = []byte("HTTP/1.0 413\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
@@ -125,22 +148,13 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 		return
 	}
 
-	nf := c.(interface {
-		File() (*os.File, error)
-	})
-	f, _ := nf.File()
-	binary.LittleEndian.PutUint64(buf[:8], uint64(f.Fd()))
-	binary.LittleEndian.PutUint32(buf[8:8+4], uint32(readLength))
-
 	p.mu.RLock()
 	h, ok := p.hosts[hostname]
 	if !ok {
 		h = p.hosts[p.defaultHost]
 	}
 	p.mu.RUnlock()
-	if _, err := h.Write(buf[:8+4+readLength]); err != nil {
-		f.Close()
-	}
+	h.Transfer(c, buf[:readLength])
 }
 
 func readEncrypted(c net.Conn, buf []byte) (hostname string, readLength int) {
@@ -272,9 +286,3 @@ func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
 	}
 	return
 }
-
-// Errors
-var (
-	ErrNoDefault       = errors.New("default host empty")
-	ErrNoRemoveDefault = errors.New("cannot remove default host")
-)
