@@ -46,7 +46,13 @@ type listener struct {
 func (l *listener) Accept() (net.Conn, error) {
 	c, ok := <-l.data
 	if !ok {
-		return nil, &OpError{Op: "accept", Net: "proxy", Source: "proxy", Addr: addr{}, Err: ErrClosing}
+		return nil, &net.OpError{
+			Op:     "accept",
+			Net:    "proxy",
+			Source: addr{},
+			Addr:   addr{},
+			Err:    ErrClosing,
+		}
 	}
 	return c, nil
 }
@@ -77,10 +83,13 @@ func run(r io.Reader, nc, ec chan *conn) {
 	)
 	for {
 		_, err = r.Read(connType[:])
-		_, err = r.Read(fs[:])
-		_, err = r.Read(length)
+		_, err = r.Read(fd[:])
+		_, err = r.Read(length[:])
 		buf := make([]byte, int(binary.LittleEndian.Uint32(length[:])))
 		_, err = r.Read(buf)
+		if err != nil {
+			continue
+		}
 
 		var fc net.Conn
 
@@ -91,7 +100,7 @@ func run(r io.Reader, nc, ec chan *conn) {
 			buf:  buf,
 		}
 
-		if connType == 0 {
+		if connType[0] == 0 {
 			nc <- c
 		} else {
 			ec <- c
