@@ -8,18 +8,43 @@ import (
 	"net"
 	"os"
 	"sync"
+	"syscall"
 )
 
 type file interface {
 	File() (*os.File, error)
 }
 
-type Host struct {
+type host struct {
 	sync.Mutex
+	f *os.File
 	*net.UnixConn
 }
 
-func (h *Host) transfer(c net.Conn, buf []byte) error {
+func newHost() (*host, error) {
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return nil, err
+	}
+	u := os.NewFile(uintptr(fds[0]), "")
+	f := os.NewFile(uintptr(fds[1]), "")
+	fc, err := net.FileConn(u)
+	if err != nil { // really shouldn't happen!
+		u.Close()
+		f.Close()
+		return nil, err
+	}
+	uc, ok := fc.(*net.UnixConn)
+	if !ok { // ... again, really shouldn't happen
+		return nil, ErrBadSocket
+	}
+	return &host{
+		f:        f,
+		UnixConn: uc,
+	}, nil
+}
+
+func (h *host) transfer(c net.Conn, buf []byte) error {
 	f, err := c.(file).File()
 	if err != nil {
 		return err
@@ -28,10 +53,10 @@ func (h *Host) transfer(c net.Conn, buf []byte) error {
 	binary.LittleEndian.PutUint32(length, uint32(len(buf)))
 	h.Lock()
 	defer h.Unlock()
-	if _, _, err = h.WriteMsgUnix(length, sycall.UnixRights(int(f.Fd())), nil); err != nil {
+	if _, _, err = h.WriteMsgUnix(length, syscall.UnixRights(int(f.Fd())), nil); err != nil {
 		return err
 	}
-	_, err = h.Write(buf[4:])
+	_, err = h.Write(buf)
 	return err
 }
 
@@ -40,32 +65,49 @@ type Proxy struct {
 	encrypted bool
 
 	mu    sync.RWMutex
-	hosts map[string]*Host
+	hosts map[string]*host
 }
 
+// New creates a new proxy for the given Listener
 func New(l net.Listener, encrypted bool) *Proxy {
 	return &Proxy{
 		l:         l,
 		encrypted: encrypted,
-		hosts:     make(map[string]host),
+		hosts:     make(map[string]*host),
 	}
 }
 
-func (p *Proxy) Get(name string) *Host {
+// Get retrieves the connection for a given host
+func (p *Proxy) Get(name string) *os.File {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.hosts[name]
+	h, ok := p.hosts[name]
+	if !ok {
+		return nil
+	}
+	return h.f
 }
 
-func (p *Proxy) Update(h *Host, names ...string) {
+// AddHost adds a new host, with its aliases, and returns a File to be passed
+// to a child process
+func (p *Proxy) AddHost(names ...string) (*os.File, error) {
+	h, err := newHost()
+	if err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	for _, name := range names {
 		p.hosts[name] = h
 	}
 	p.mu.Unlock()
+	return h.f, nil
 }
 
-func (p *Proxy) Remove(name string) error {
+// RemoveHost removes a single alias for a server.
+//
+// This does not close any connections. If this is the last alias for the
+// server, you should use CloseHost instead.
+func (p *Proxy) RemoveHost(name string) error {
 	if name == "" {
 		return ErrNoRemoveDefault
 	}
@@ -73,6 +115,23 @@ func (p *Proxy) Remove(name string) error {
 	delete(p.hosts, name)
 	p.mu.Unlock()
 	return nil
+}
+
+// CloseHost removes all of the aliases for the server and closes the
+// connection
+func (p *Proxy) CloseHost(name string) error {
+	p.mu.Lock()
+	defer p.mu.Lock()
+	h, ok := p.hosts[name]
+	if !ok {
+		return nil
+	}
+	for n, nh := range p.hosts {
+		if h == nh {
+			delete(p.hosts, n)
+		}
+	}
+	return h.Close()
 }
 
 func (p *Proxy) Start() error {
@@ -97,7 +156,7 @@ func (p *Proxy) run() error {
 			}
 			return err
 		}
-		go p.handleConn(c, p.ssl)
+		go p.handleConn(c)
 	}
 }
 
@@ -128,7 +187,7 @@ var pool = sync.Pool{
 	},
 }
 
-func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
+func (p *Proxy) handleConn(c net.Conn) {
 	buf := pool.Get().([]byte)
 	defer pool.Put(buf)
 	defer c.Close()
@@ -136,10 +195,10 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 		hostname   string
 		readLength int
 	)
-	if encrypted {
-		hostname, readLength = readEncrypted(c, buf[8+4:])
+	if p.encrypted {
+		hostname, readLength = readEncrypted(c, buf)
 	} else {
-		hostname, readLength = readHTTP(c, buf[8+4:])
+		hostname, readLength = readHTTP(c, buf)
 	}
 	if readLength == MaxHeaderSize {
 		c.Write(HeadersTooLarge)
@@ -253,6 +312,7 @@ func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
 		last int
 		char = make([]byte, 1, 1)
 	)
+	buf = buf[:0]
 	for readLength < MaxHeaderSize {
 		n, err := c.Read(char)
 		if err != nil {
@@ -289,4 +349,5 @@ func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
 var (
 	ErrNoDefault       = errors.New("no default set")
 	ErrNoRemoveDefault = errors.New("cannot remove default host, only replace/update")
+	ErrBadSocket       = errors.New("bad socket type")
 )
