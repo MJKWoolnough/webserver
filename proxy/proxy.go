@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 )
@@ -203,6 +204,11 @@ func (p *Proxy) handleConn(c net.Conn) {
 	if readLength == MaxHeaderSize {
 		c.Write(HeadersTooLarge)
 		return
+	}
+
+	pos := strings.IndexByte(hostname, ':')
+	if pos >= 0 {
+		hostname = hostname[:pos]
 	}
 
 	p.mu.RLock()
