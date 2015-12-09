@@ -26,19 +26,15 @@ func Listen(socketFD uintptr) (net.Listener, error) {
 
 func (l *listener) Accept() (net.Conn, error) {
 	length := make([]byte, 4)
-	_, err := l.unix.Read(length)
+
+	oob := make([]byte, syscall.CmsgSpace(4))
+
+	_, _, _, _, err = l.unix.ReadMsgUnix(length, oob)
 	if err != nil {
 		return nil, err
 	}
 	buf := make([]byte, binary.LittleEndian.Uint32(length))
 	_, err = l.unix.Read(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	oob := make([]byte, syscall.CmsgSpace(4))
-
-	_, _, _, _, err = l.unix.ReadMsgUnix(nil, oob)
 	if err != nil {
 		return nil, err
 	}
