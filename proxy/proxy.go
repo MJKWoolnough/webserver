@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -13,12 +14,12 @@ type file interface {
 	File() (*os.File, error)
 }
 
-type host struct {
+type Host struct {
 	sync.Mutex
 	*net.UnixConn
 }
 
-func (h *host) Transfer(buf []byte, c net.Conn) error {
+func (h *Host) transfer(c net.Conn, buf []byte) error {
 	f, err := c.(file).File()
 	if err != nil {
 		return err
@@ -38,9 +39,8 @@ type Proxy struct {
 	l         net.Listener
 	encrypted bool
 
-	mu          sync.RWMutex
-	hosts       map[string]host
-	defaultHost string
+	mu    sync.RWMutex
+	hosts map[string]*Host
 }
 
 func New(l net.Listener, encrypted bool) *Proxy {
@@ -51,40 +51,35 @@ func New(l net.Listener, encrypted bool) *Proxy {
 	}
 }
 
-func (p *Proxy) Update(name string, c *net.UnixConn) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.hosts[name] = c
-	if p.defaultHost == "" {
-		p.defaultHost = name
-	}
+func (p *Proxy) Get(name string) *Host {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.hosts[name]
 }
 
-func (p *Proxy) Default(name string) error {
-	if name == "" {
-		return ErrNoDefault
-	}
+func (p *Proxy) Update(h *Host, names ...string) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	if _, ok := p.hosts[name]; !ok {
-		return ErrNoDefault
+	for _, name := range names {
+		p.hosts[name] = h
 	}
-	p.defaultHost = name
-	return nil
+	p.mu.Unlock()
 }
 
 func (p *Proxy) Remove(name string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.defaultHost == name {
+	if name == "" {
 		return ErrNoRemoveDefault
 	}
+	p.mu.Lock()
 	delete(p.hosts, name)
+	p.mu.Unlock()
 	return nil
 }
 
 func (p *Proxy) Start() error {
-	if p.defaultHost == "" {
+	p.mu.RLock()
+	_, ok := p.hosts[""]
+	p.mu.RUnlock()
+	if !ok {
 		return ErrNoDefault
 	}
 	go p.run()
@@ -107,7 +102,10 @@ func (p *Proxy) run() error {
 }
 
 func (p *Proxy) Run() error {
-	if p.defaultHost == "" {
+	p.mu.RLock()
+	_, ok := p.hosts[""]
+	p.mu.RUnlock()
+	if !ok {
 		return ErrNoDefault
 	}
 	return p.run()
@@ -151,10 +149,10 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 	p.mu.RLock()
 	h, ok := p.hosts[hostname]
 	if !ok {
-		h = p.hosts[p.defaultHost]
+		h = p.hosts[""]
 	}
 	p.mu.RUnlock()
-	h.Transfer(c, buf[:readLength])
+	h.transfer(c, buf[:readLength])
 }
 
 func readEncrypted(c net.Conn, buf []byte) (hostname string, readLength int) {
@@ -286,3 +284,9 @@ func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
 	}
 	return
 }
+
+// Errors
+var (
+	ErrNoDefault       = errors.New("no default set")
+	ErrNoRemoveDefault = errors.New("cannot remove default host, only replace/update")
+)
