@@ -29,7 +29,7 @@ func (l *listener) Accept() (net.Conn, error) {
 
 	oob := make([]byte, syscall.CmsgSpace(4))
 
-	_, _, _, _, err = l.unix.ReadMsgUnix(length, oob)
+	_, _, _, _, err := l.unix.ReadMsgUnix(length, oob)
 	if err != nil {
 		return nil, err
 	}
@@ -38,14 +38,14 @@ func (l *listener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	msg, err = syscall.ParseSocketControlMessage(oob)
+	msg, err := syscall.ParseSocketControlMessage(oob)
 	if err != nil {
 		return nil, err
 	}
 	if len(msg) != 1 {
 		return nil, ErrInvalidSCM
 	}
-	fd, err := syscall.ParseUnixRights(&msgs[0])
+	fd, err := syscall.ParseUnixRights(&msg[0])
 	if err != nil {
 		return nil, err
 	}
@@ -57,14 +57,22 @@ func (l *listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	return &conn{
-		buf: buf,
-		Conn, c,
+		buf:  buf,
+		Conn: c,
 	}, nil
 }
 
+func (l *listener) Close() error {
+	return l.unix.Close()
+}
+
+func (l *listener) Addr() net.Addr {
+	return l.unix.LocalAddr()
+}
+
 type conn struct {
-	buf  []byte
-	Conn net.Conn
+	buf []byte
+	net.Conn
 }
 
 func (c *conn) Read(b []byte) (int, error) {
