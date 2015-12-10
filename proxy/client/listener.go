@@ -5,9 +5,13 @@ import (
 	"errors"
 	"net"
 	"os"
+	"runtime"
+	"sync"
 	"syscall"
 	"time"
 )
+
+var openConnections sync.WaitGroup
 
 type listener struct {
 	unix *net.UnixConn
@@ -57,14 +61,25 @@ func (l *listener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tcp, ok := c.(*net.TCPConn); ok {
-		tcp.SetKeepAlive(true)
-		tcp.SetKeepAlivePeriod(3 * time.Minute)
+	if ka, ok := c.(keepAlive); ok {
+		ka.SetKeepAlive(true)
+		ka.SetKeepAlivePeriod(3 * time.Minute)
 	}
-	return &conn{
+	c := &conn{
 		buf:  buf,
 		Conn: c,
-	}, nil
+	}
+	runtime.SetFinalizer(c, connClose)
+	return c, nil
+}
+
+type keepAlive interface {
+	SetKeepAlive(bool) error
+	SetKeepAlivePeriod(time.Duration) error
+}
+
+func connClose(*conn) {
+	openConnections.Done()
 }
 
 func (l *listener) Close() error {
@@ -92,6 +107,12 @@ func (c *conn) Read(b []byte) (int, error) {
 		return n + m, err
 	}
 	return n, nil
+}
+
+func (c *conn) Close() error {
+	runtime.SetFinalizer(c, nil)
+	connClose()
+	return c.Conn.Close()
 }
 
 // Errors
