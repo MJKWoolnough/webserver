@@ -12,7 +12,6 @@ import (
 
 var (
 	proxyHTTPSocket, proxyHTTPSSocket net.Listener
-	addr                              string
 	server                            = new(http.Server)
 
 	mu               sync.RWMutex
@@ -39,10 +38,6 @@ func init() {
 		}
 		os.Unsetenv("proxyHTTPSSocket")
 	}
-	if paddr, ok := os.LookupEnv("proxyAddr"); ok {
-		addr = paddr
-		os.Unsetenv("proxyAddr")
-	}
 	// setup signals
 }
 
@@ -54,9 +49,7 @@ func Setup(s *http.Server) error {
 		return ErrNoSocket
 	}
 	if s == nil {
-		s = &http.Server{
-			Addr: addr,
-		}
+		s = new(http.Server)
 	}
 	server = s
 	return nil
