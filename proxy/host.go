@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"os/exec"
+	"strconv"
 	"sync"
 )
 
@@ -14,11 +15,33 @@ type Host struct {
 	httpTransfer, httpsTransfer *transfer
 }
 
-func (p *Proxy) NewHost(c *exec.Cmd) *Host {
-	return &Host{
+func (p *Proxy) NewHost(c *exec.Cmd) (*Host, error) {
+	h := &Host{
 		cmd:   c,
 		proxy: p,
 	}
+	if p.http != nil {
+		c.Env = append(c.Env, "proxyHTTPSocket="+strconv.FormatUint(uint(len(c.ExtraFiles))+3, 10))
+		var err error
+		h.httpTransfer, err = newTransfer()
+		if err != nil {
+			return nil, err
+		}
+		c.ExtraFiles = append(c.ExtraFiles, h.httpTransfer.f)
+	}
+	if p.https != nil {
+		c.Env = append(c.Env, "proxyHTTPSSocket="+strconv.FormatUint(uint(len(c.ExtraFiles))+3, 10))
+		var err error
+		h.httpsTransfer, err = newTransfer()
+		if err != nil {
+			return nil, err
+		}
+		c.ExtraFiles = append(c.ExtraFiles, h.httpTransfer.f)
+	}
+	if err := c.Start(); err != nil {
+		return nil, err
+	}
+	return h, err
 }
 
 func (h *Host) AddAliases(names ...string) error {
