@@ -8,10 +8,10 @@ import (
 type Host struct {
 	proxy *Proxy
 
-	mu                        sync.RWMutex
-	cmd                       *exec.Cmd
-	aliases                   []string
-	httpTransfer, sslTransfer *transfer
+	mu                          sync.RWMutex
+	cmd                         *exec.Cmd
+	aliases                     []string
+	httpTransfer, httpsTransfer *transfer
 }
 
 func (p *Proxy) NewHost(c *exec.Cmd) *Host {
@@ -81,7 +81,7 @@ func (h *Host) getTransfer(encrypted bool) *transfer {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if encrypted {
-		return h.sslTransfer
+		return h.httpsTransfer
 	}
 	return h.httpTransfer
 }

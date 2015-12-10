@@ -7,17 +7,17 @@ import (
 )
 
 type Proxy struct {
-	http, ssl net.Listener
+	http, https net.Listener
 
 	mu          sync.RWMutex
 	hostnames   map[string]*Host
 	defaultHost *Host
 }
 
-func New(http, ssl net.Listener) *Proxy {
+func New(http, https net.Listener) *Proxy {
 	return &Proxy{
-		http: http,
-		ssl:  ssl,
+		http:  http,
+		https: https,
 	}
 }
 
