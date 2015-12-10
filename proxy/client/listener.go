@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
 )
 
 type listener struct {
@@ -55,6 +56,10 @@ func (l *listener) Accept() (net.Conn, error) {
 	c, err := net.FileConn(os.NewFile(uintptr(fd[0]), ""))
 	if err != nil {
 		return nil, err
+	}
+	if tcp, ok := c.(*net.TCPConn); ok {
+		tcp.SetKeepAlive(true)
+		tcp.SetKeepAlivePeriod(3 * time.Minute)
 	}
 	return &conn{
 		buf:  buf,
