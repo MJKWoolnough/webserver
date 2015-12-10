@@ -65,12 +65,12 @@ func (l *listener) Accept() (net.Conn, error) {
 		ka.SetKeepAlive(true)
 		ka.SetKeepAlivePeriod(3 * time.Minute)
 	}
-	c := &conn{
+	conn := &conn{
 		buf:  buf,
 		Conn: c,
 	}
-	runtime.SetFinalizer(c, connClose)
-	return c, nil
+	runtime.SetFinalizer(conn, connClose)
+	return conn, nil
 }
 
 type keepAlive interface {
@@ -111,7 +111,7 @@ func (c *conn) Read(b []byte) (int, error) {
 
 func (c *conn) Close() error {
 	runtime.SetFinalizer(c, nil)
-	connClose()
+	connClose(nil)
 	return c.Conn.Close()
 }
 
