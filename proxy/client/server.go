@@ -7,12 +7,19 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 )
 
 var (
 	proxyHTTPSocket, proxyHTTPSSocket net.Listener
 	addr                              string
 	server                            = new(http.Server)
+
+	mu               sync.RWMutex
+	started, stopped bool
+	serverError      error
+
+	wait = make(chan struct{})
 )
 
 func init() {
@@ -43,12 +50,16 @@ func Setup(s *http.Server) error {
 	if started {
 		return ErrRunning
 	}
-	if proxyHTTPSocketFD == 0 && proxySSLSocketFD == 0 {
+	if proxyHTTPSocket == nil && proxyHTTPSSocket == nil {
 		return ErrNoSocket
 	}
 	if s == nil {
-		sever = new(server)
+		s = &http.Server{
+			Addr: addr,
+		}
 	}
+	server = s
+	return nil
 }
 
 func SetupTLS(s *http.Server, certFile, keyFile string) error {
@@ -66,30 +77,91 @@ func SetupTLS(s *http.Server, certFile, keyFile string) error {
 	return Setup(s)
 }
 
+func run() {
+	var wg sync.WaitGroup
+	mu.Lock()
+	started = true
+	mu.Unlock()
+	if proxyHTTPSocket != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			server.Serve(proxyHTTPSocket)
+		}()
+	}
+	if proxyHTTPSSocket != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if server.TLSConfig == nil {
+				server.Serve(proxyHTTPSSocket)
+			} else {
+				server.Serve(tls.NewListener(proxyHTTPSSocket, server.TLSConfig))
+			}
+
+		}()
+	}
+
+	wg.Wait()
+	close(wait)
+}
+
 func Run() error {
-	if started {
+	mu.RLock()
+	s1 := started
+	s2 := stopped
+	mu.RUnlock()
+	if s1 {
 		return ErrRunning
 	}
+	if s2 {
+		return ErrStopped
+	}
+	go run()
+	<-wait
 	return nil
 }
 
 func Start() error {
-	if started {
+	mu.RLock()
+	s1 := started
+	s2 := stopped
+	mu.RUnlock()
+	if s1 {
 		return ErrRunning
 	}
+	if s2 {
+		return ErrStopped
+	}
+	go run()
 	return nil
 }
 
 func Wait() error {
-	if !started {
+	mu.RLock()
+	s := started
+	mu.RUnlock()
+	if !s {
 		return ErrNotRunning
 	}
+	<-wait
+	openConnections.Wait()
 	return nil
 }
 
 func Close() error {
+	mu.Lock()
+	defer mu.Unlock()
+	if stopped {
+		return ErrStopped
+	}
+	stopped = true
 	if started {
-
+		err := proxyHTTPSocket.Close()
+		if e := proxyHTTPSSocket.Close(); e != nil {
+			return e
+		}
+		return err
 	}
 	return nil
 }
@@ -99,4 +171,5 @@ var (
 	ErrNoSocket   = errors.New("no sockets setup")
 	ErrRunning    = errors.New("already running")
 	ErrNotRunning = errors.New("not running")
+	ErrStopped    = errors.New("stopped")
 )
