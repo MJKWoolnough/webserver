@@ -12,7 +12,7 @@ type listener struct {
 	unix *net.UnixConn
 }
 
-func Listen(socketFD uintptr) (net.Listener, error) {
+func newListener(socketFD uintptr) (net.Listener, error) {
 	c, err := net.FileConn(os.NewFile(socketFD, ""))
 	if err != nil {
 		return nil, err
