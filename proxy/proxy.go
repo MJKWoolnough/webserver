@@ -15,9 +15,13 @@ type Proxy struct {
 }
 
 func New(http, https net.Listener) *Proxy {
+	if http == nil && https == nil {
+		return nil
+	}
 	return &Proxy{
-		http:  http,
-		https: https,
+		http:      http,
+		https:     https,
+		hostnames: make(map[string]*Host),
 	}
 }
 
