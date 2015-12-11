@@ -39,6 +39,10 @@ func newTransfer() (*transfer, error) {
 
 }
 
+type file interface {
+	File() (*os.File, error)
+}
+
 func (t *transfer) Transfer(c net.Conn, buf []byte) error {
 	f, err := c.(file).File()
 	if err != nil {
