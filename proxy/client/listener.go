@@ -69,6 +69,7 @@ func (l *listener) Accept() (net.Conn, error) {
 		buf:  buf,
 		Conn: c,
 	}
+	openConnections.Add(1)
 	runtime.SetFinalizer(conn, connClose)
 	return conn, nil
 }
@@ -93,6 +94,7 @@ func (l *listener) Addr() net.Addr {
 type conn struct {
 	buf []byte
 	net.Conn
+	closed bool
 }
 
 func (c *conn) Read(b []byte) (int, error) {
@@ -110,8 +112,12 @@ func (c *conn) Read(b []byte) (int, error) {
 }
 
 func (c *conn) Close() error {
+	if c.closed {
+		return nil
+	}
 	runtime.SetFinalizer(c, nil)
 	connClose(nil)
+	c.closed = true
 	return c.Conn.Close()
 }
 
