@@ -48,7 +48,6 @@ func (p *Proxy) IsDefault(h *Host) bool {
 
 func (p *Proxy) runConns() error {
 	p.started = true
-	defer close(p.closed)
 	ec := make(chan error, 1)
 	if p.http != nil {
 		defer p.http.Close()
@@ -63,12 +62,23 @@ func (p *Proxy) runConns() error {
 		}()
 	}
 	p.err <- ec
+	close(p.closed)
+	go p.closeHosts()
 	return p.err
+}
+
+func (p *Proxy) closeHosts() {
+	for _, host := range p.hostnames {
+		host.Stop()
+	}
 }
 
 func (p *Proxy) Run() error {
 	if p.started {
 		return ErrRunning
+	}
+	if p.defaultHost == nil {
+		return ErrNoDefault
 	}
 	return p.runConns()
 }
@@ -76,6 +86,9 @@ func (p *Proxy) Run() error {
 func (p *Proxy) Start() error {
 	if p.started {
 		return ErrRunning
+	}
+	if p.defaultHost == nil {
+		return ErrNoDefault
 	}
 	go p.runConns()
 	return nil
@@ -111,4 +124,5 @@ var (
 	ErrInvalidHost = errors.New("invalid host")
 	ErrRunning     = errors.New("already running")
 	ErrNotRunning  = errors.New("not running")
+	ErrNoDefault   = errors.New("no default host set")
 )
