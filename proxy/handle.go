@@ -21,9 +21,9 @@ var pool = sync.Pool{
 	},
 }
 
-func (p *Proxy) run(encrypted bool) error {
+func (p *Proxy) run(l net.Listener, encrypted bool) error {
 	for {
-		c, err := p.l.Accept()
+		c, err := l.Accept()
 		if err != nil {
 			if oe, ok := err.(*net.OpError); ok {
 				if oe.Temporary() {

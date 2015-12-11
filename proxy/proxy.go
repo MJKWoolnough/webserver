@@ -49,19 +49,21 @@ func (p *Proxy) IsDefault(h *Host) bool {
 func (p *Proxy) runConns() error {
 	p.started = true
 	ec := make(chan error, 1)
-	if p.http != nil {
-		defer p.http.Close()
+	http := p.http
+	if http != nil {
+		defer http.Close()
 		go func() {
-			ec <- p.run(false)
+			ec <- p.run(http, false)
 		}()
 	}
-	if p.https != nil {
-		defer p.https.Close()
+	https := p.https
+	if https != nil {
+		defer https.Close()
 		go func() {
-			ec <- p.run(true)
+			ec <- p.run(https, true)
 		}()
 	}
-	p.err <- ec
+	p.err = <-ec
 	close(p.closed)
 	go p.closeHosts()
 	return p.err
@@ -105,7 +107,7 @@ func (p *Proxy) Wait() error {
 func (p *Proxy) addAlias(h *Host, name string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	i, ok := p.hostnames[name]
+	_, ok := p.hostnames[name]
 	if ok {
 		return false
 	}
