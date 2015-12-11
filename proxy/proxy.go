@@ -9,6 +9,10 @@ import (
 type Proxy struct {
 	http, https net.Listener
 
+	started bool
+	closed  chan struct{}
+	err     error
+
 	mu          sync.RWMutex
 	hostnames   map[string]*Host
 	defaultHost *Host
@@ -21,6 +25,7 @@ func New(http, https net.Listener) *Proxy {
 	return &Proxy{
 		http:      http,
 		https:     https,
+		closed:    make(chan struct{}),
 		hostnames: make(map[string]*Host),
 	}
 }
@@ -41,16 +46,47 @@ func (p *Proxy) IsDefault(h *Host) bool {
 	return p.defaultHost == h
 }
 
+func (p *Proxy) runConns() error {
+	p.started = true
+	defer close(p.closed)
+	ec := make(chan error, 1)
+	if p.http != nil {
+		defer p.http.Close()
+		go func() {
+			ec <- p.run(false)
+		}()
+	}
+	if p.https != nil {
+		defer p.https.Close()
+		go func() {
+			ec <- p.run(true)
+		}()
+	}
+	p.err <- ec
+	return p.err
+}
+
 func (p *Proxy) Run() error {
-	return nil
+	if p.started {
+		return ErrRunning
+	}
+	return p.runConns()
 }
 
 func (p *Proxy) Start() error {
+	if p.started {
+		return ErrRunning
+	}
+	go p.runConns()
 	return nil
 }
 
 func (p *Proxy) Wait() error {
-	return nil
+	if !p.started {
+		return ErrNotRunning
+	}
+	<-p.closed
+	return p.err
 }
 
 func (p *Proxy) addAlias(h *Host, name string) bool {
@@ -73,4 +109,6 @@ func (p *Proxy) removeAlias(name string) {
 // Errors
 var (
 	ErrInvalidHost = errors.New("invalid host")
+	ErrRunning     = errors.New("already running")
+	ErrNotRunning  = errors.New("not running")
 )
