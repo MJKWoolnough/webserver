@@ -29,7 +29,7 @@ func (p *Proxy) NewHost(c *exec.Cmd) (*Host, error) {
 	return h, nil
 }
 
-func (h *Host) setupCmd(c *exec.Cmd) (*transf, *transf, error) {
+func (h *Host) setupCmd(c *exec.Cmd) (*transfer, *transfer, error) {
 	select {
 	case <-h.proxy.closed:
 		return nil, nil, ErrProxyClosed
@@ -50,7 +50,7 @@ func (h *Host) setupCmd(c *exec.Cmd) (*transf, *transf, error) {
 		}
 	}()
 	if h.proxy.http != nil {
-		c.Env = append(c.Env, "proxyHTTPSocket="+strconv.FormatUint(uint(len(c.ExtraFiles))+3, 10))
+		c.Env = append(c.Env, "proxyHTTPSocket="+strconv.FormatUint(uint64(len(c.ExtraFiles))+3, 10))
 		var err error
 		http, err = newTransfer()
 		if err != nil {
@@ -59,7 +59,7 @@ func (h *Host) setupCmd(c *exec.Cmd) (*transf, *transf, error) {
 		c.ExtraFiles = append(c.ExtraFiles, http.f)
 	}
 	if h.proxy.https != nil {
-		c.Env = append(c.Env, "proxyHTTPSSocket="+strconv.FormatUint(uint(len(c.ExtraFiles))+3, 10))
+		c.Env = append(c.Env, "proxyHTTPSSocket="+strconv.FormatUint(uint64(len(c.ExtraFiles))+3, 10))
 		var err error
 		https, err = newTransfer()
 		if err != nil {
@@ -163,14 +163,14 @@ func (h *Host) Stop() error {
 }
 
 func (h *Host) Replace(c *exec.Cmd) error {
-	http, https, err := h.setupCmd(cmd)
+	http, https, err := h.setupCmd(c)
 	if err != nil {
 		return err
 	}
 	h.mu.Lock()
 	h.httpTransfer.Close()
 	h.httpsTransfer.Close()
-	h.cmd = cmd
+	h.cmd = c
 	h.httpTransfer = http
 	h.httpsTransfer = https
 	h.mu.Unlock()
