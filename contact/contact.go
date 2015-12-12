@@ -35,9 +35,9 @@ func (v *values) ParserList() form.ParserList {
 func (c *Contact) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var v values
 	if r.Form.Get("submit") != "" {
-		err := form.Parse(v)
+		err := form.Parse(&v, r.Form)
 		if err == nil {
-			smtp.SendMail(c.Host, c.Auth, c.From, c.To, []byte(fmt.Sprintf("To: %s\nFrom: %s\nSubject: Message Received\n\nName: %s\nEmail: %s\nPhone: %s\nSubject: %s\nMessage: %s", c.To, c.From, v.Name, v.Email, v.Phone, v.Subject, v.Message)))
+			smtp.SendMail(c.Host, c.Auth, c.From, []string{c.To}, []byte(fmt.Sprintf("To: %s\nFrom: %s\nSubject: Message Received\n\nName: %s\nEmail: %s\nPhone: %s\nSubject: %s\nMessage: %s", c.To, c.From, v.Name, v.Email, v.Phone, v.Subject, v.Message)))
 			v.Done = true
 		} else {
 			v.Errors = err.(form.Errors)
