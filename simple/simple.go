@@ -25,7 +25,7 @@ func main() {
 	if *contactForm {
 		from := os.Getenv("contactFormFrom")
 		os.Unsetenv("contactFormFrom")
-		to := os.Genenv("contactFormTo")
+		to := os.Getenv("contactFormTo")
 		os.Unsetenv("contactFormTo")
 		addr := os.Getenv("contactFormAddr")
 		os.Unsetenv("contactFormAddr")
@@ -39,9 +39,15 @@ func main() {
 			addrMPort = addrMPort[:p]
 		}
 		tmpl := template.Must(template.ParseFiles(path.Join(*fileRoot, "contact.html")))
-		http.Handler("/contact", contact.New(tmpl, from, to, addr, smtp.PlainAuth("", username, password, addrMPort)))
+		http.Handle("/contact", &contact.Contact{
+			Template: tmpl,
+			From:     from,
+			To:       to,
+			Host:     addr,
+			Auth:     smtp.PlainAuth("", username, password, addrMPort),
+		})
 	}
-	http.Handle("/", http.FileServer(*fileRoot))
+	http.Handle("/", http.FileServer(http.Dir(*fileRoot)))
 
 	cc := make(chan struct{})
 	go func() {
@@ -55,7 +61,7 @@ func main() {
 		}
 		signal.Stop(sc)
 		close(sc)
-		client.Stop()
+		client.Close()
 		client.Wait()
 		close(cc)
 	}()
