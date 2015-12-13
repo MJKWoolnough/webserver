@@ -34,6 +34,7 @@ func (v *values) ParserList() form.ParserList {
 
 func (c *Contact) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var v values
+	r.ParseForm()
 	if r.Form.Get("submit") != "" {
 		err := form.Parse(&v, r.Form)
 		if err == nil {
