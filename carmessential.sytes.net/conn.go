@@ -2,49 +2,59 @@ package main
 
 import (
 	"database/sql"
-	"runtime"
-	"sync"
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 )
 
 type ConnPool struct {
-	pool sync.Pool
+	databaseName string
+	pool         chan *Conn
 }
 
+const (
+	numStatements = iota
+)
+
 type Conn struct {
-	db *sql.DB
+	db     *sql.DB
+	stmnts [numStatements]*sql.Stmt
 }
 
 func (c *Conn) Close() error {
-	c.db.Close()
-	return nil
+	for _, s := range c.stmnts {
+		s.Close()
+	}
+	return c.db.Close()
 }
 
 var SQLPool ConnPool
 
-func SetupSQL(databaseName string) {
-	SQLPool.pool = sync.Pool{
-		New: func() interface{} {
-			db, err := sql.Open("sqlite3", databaseName)
-			if err != nil {
-				panic(err)
-			}
-			// prepare statements
-			c := &Conn{
-				db,
-			}
-			runtime.SetFinalizer(c, (*Conn).Close)
-			return c
-		},
-	}
+func SetupDatabase(databaseName string, conns uint) {
+	SQLPool.databaseName = databaseName
+	SQLPool.pool = make(chan *Conn, conns)
 }
 
-func (cp *ConnPool) Connect() (c *Conn, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			err, _ = e.(error)
-		}
-	}()
-	return cp.pool.Get().(*Conn), nil
+func (cp *ConnPool) Get() (*Conn, error) {
+	select {
+	case c := <-cp.pool:
+		return c, nil
+	default:
+	}
+	db, err := sql.Open("sqlite3", cp.databaseName)
+	if err != nil {
+		return nil, err
+	}
+	// prepare statements
+	return &Conn{
+		db: db,
+	}, nil
+}
+
+func (cp *ConnPool) Put(c *Conn) {
+	select {
+	case cp.pool <- c:
+		return
+	default:
+	}
+	c.Close()
 }
