@@ -18,10 +18,13 @@ import (
 var (
 	contactForm = flag.Bool("c", false, "enable a contact form at /contact.html")
 	fileRoot    = flag.String("r", "", "root of http filesystem")
+	logName     = flag.String("n", "", "name for logging")
+	logger      *log.Logger
 )
 
 func main() {
 	flag.Parse()
+	logger = log.New(os.Stderr, *logName, log.LstdFlags)
 	if *contactForm {
 		from := os.Getenv("contactFormFrom")
 		os.Unsetenv("contactFormFrom")
@@ -51,12 +54,12 @@ func main() {
 
 	cc := make(chan struct{})
 	go func() {
-		log.Println("Server Started")
+		logger.Println("Server Started")
 		sc := make(chan os.Signal, 1)
 		signal.Notify(sc, os.Interrupt)
 		select {
 		case <-sc:
-			log.Println("Closing")
+			logger.Println("Closing")
 		case <-cc:
 		}
 		signal.Stop(sc)
@@ -71,7 +74,7 @@ func main() {
 	select {
 	case <-cc:
 	default:
-		log.Println(err)
+		logger.Println(err)
 		cc <- struct{}{}
 	}
 	<-cc

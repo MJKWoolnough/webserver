@@ -34,41 +34,42 @@ var configFile = flag.String("c", "", "configuration file")
 
 func main() {
 	flag.Parse()
+	logger := log.New(os.Stderr, "Proxy", log.LstdFlags)
 	if *configFile == "" {
-		log.Println("no configuration file")
+		logger.Println("no configuration file")
 		return
 	}
 	f, err := os.Open(*configFile)
 	if err != nil {
-		log.Println("error opening configuarion file: ", err)
+		logger.Println("error opening configuarion file: ", err)
 		return
 	}
 	var config Config
 	err = json.NewDecoder(f).Decode(&config)
 	f.Close()
 	if err != nil {
-		log.Println("error reading configuration file: ", err)
+		logger.Println("error reading configuration file: ", err)
 		return
 	}
 	if len(config.Sites) == 0 {
-		log.Println("no sites configured")
+		logger.Println("no sites configured")
 		return
 	}
 	var http, https net.Listener
 	if config.HTTPAddr != "" {
 		http, err = net.Listen("tcp", config.HTTPAddr)
 		if err != nil {
-			log.Println("error opening HTTP listener: ", err)
+			logger.Println("error opening HTTP listener: ", err)
 		}
 	}
 	if config.HTTPSAddr != "" {
 		https, err = net.Listen("tcp", config.HTTPSAddr)
 		if err != nil {
-			log.Println("error opening HTTPS listener: ", err)
+			logger.Println("error opening HTTPS listener: ", err)
 		}
 	}
 	if http == nil && https == nil {
-		log.Println("no working listeners")
+		logger.Println("no working listeners")
 		return
 	}
 	p := proxy.New(http, https)
@@ -89,7 +90,7 @@ func main() {
 		cmd.Stderr = os.Stderr
 		host, err := p.NewHost(cmd)
 		if err != nil {
-			log.Printf("error adding host %q: %s\n", site.Name, err)
+			logger.Printf("error adding host %q: %s\n", site.Name, err)
 			continue
 		}
 		if site.Default {
@@ -100,12 +101,12 @@ func main() {
 
 	cc := make(chan struct{})
 	go func() {
-		log.Println("Server Started")
+		logger.Println("Server Started")
 		sc := make(chan os.Signal, 1)
 		signal.Notify(sc, os.Interrupt)
 		select {
 		case <-sc:
-			log.Println("Closing")
+			logger.Println("Closing")
 		case <-cc:
 		}
 		signal.Stop(sc)
@@ -124,7 +125,7 @@ func main() {
 	select {
 	case <-cc:
 	default:
-		log.Println(err)
+		logger.Println(err)
 		close(cc)
 	}
 	<-cc
