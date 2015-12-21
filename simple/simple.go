@@ -39,7 +39,7 @@ func main() {
 			addrMPort = addrMPort[:p]
 		}
 		tmpl := template.Must(template.ParseFiles(path.Join(*fileRoot, "contact.html")))
-		http.Handle("/contact", &contact.Contact{
+		http.Handle("/contact.html", &contact.Contact{
 			Template: tmpl,
 			From:     from,
 			To:       to,
