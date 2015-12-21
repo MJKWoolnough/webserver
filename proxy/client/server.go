@@ -18,7 +18,7 @@ var (
 	started, stopped bool
 	serverError      error
 
-	wait = make(chan struct{})
+	wait = make(chan error)
 )
 
 func init() {
@@ -75,11 +75,12 @@ func run() {
 	mu.Lock()
 	started = true
 	mu.Unlock()
+	ec := make(chan error, 2)
 	if proxyHTTPSocket != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			server.Serve(proxyHTTPSocket)
+			ec <- server.Serve(proxyHTTPSocket)
 		}()
 	}
 	if proxyHTTPSSocket != nil {
@@ -87,15 +88,22 @@ func run() {
 		go func() {
 			defer wg.Done()
 			if server.TLSConfig == nil {
-				server.Serve(proxyHTTPSSocket)
+				ec <- server.Serve(proxyHTTPSSocket)
 			} else {
-				server.Serve(tls.NewListener(proxyHTTPSSocket, server.TLSConfig))
+				ec <- server.Serve(tls.NewListener(proxyHTTPSSocket, server.TLSConfig))
 			}
 
 		}()
 	}
-
 	wg.Wait()
+	close(ec)
+	err1 := <-ec
+	err2 := <-ec
+	if err1 != nil {
+		wait <- err1
+	} else if err2 != nil {
+		wait <- err2
+	}
 	close(wait)
 }
 
@@ -111,8 +119,7 @@ func Run() error {
 		return ErrStopped
 	}
 	go run()
-	<-wait
-	return nil
+	return <-wait
 }
 
 func Start() error {
@@ -137,9 +144,9 @@ func Wait() error {
 	if !s {
 		return ErrNotRunning
 	}
-	<-wait
+	err := <-wait
 	openConnections.Wait()
-	return nil
+	return err
 }
 
 func Close() error {
