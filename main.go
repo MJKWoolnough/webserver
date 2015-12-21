@@ -120,7 +120,6 @@ func main() {
 		if https != nil {
 			https.Close()
 		}
-		p.Stop()
 		close(cc)
 	}()
 
