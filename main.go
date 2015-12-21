@@ -120,6 +120,7 @@ func main() {
 		if https != nil {
 			https.Close()
 		}
+		p.Stop()
 		close(cc)
 	}()
 
@@ -134,6 +135,7 @@ func main() {
 	<-cc
 	logger.Println("Waiting for clients to close")
 	for _, cmd := range cmds {
+		cmd.Process.Signal(os.Interrupt)
 		cmd.Wait()
 	}
 	logger.Println("done")
