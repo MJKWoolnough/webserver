@@ -39,9 +39,11 @@ func (l *listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	buf := make([]byte, binary.LittleEndian.Uint32(length))
-	_, err = l.unix.Read(buf)
-	if err != nil {
-		return nil, err
+	if len(buf) > 0 {
+		_, err = l.unix.Read(buf)
+		if err != nil {
+			return nil, err
+		}
 	}
 	msg, err := syscall.ParseSocketControlMessage(oob)
 	if err != nil {
