@@ -42,12 +42,19 @@ func main() {
 			addrMPort = addrMPort[:p]
 		}
 		tmpl := template.Must(template.ParseFiles(path.Join(*fileRoot, "contact.html")))
+		ec := make(chan error)
+		go func() {
+			for {
+				logger.Println(<-ec)
+			}
+		}()
 		http.Handle("/contact.html", &contact.Contact{
 			Template: tmpl,
 			From:     from,
 			To:       to,
 			Host:     addr,
 			Auth:     smtp.PlainAuth("", username, password, addrMPort),
+			Err:      ec,
 		})
 	}
 	http.Handle("/", http.FileServer(http.Dir(*fileRoot)))
