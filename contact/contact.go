@@ -14,6 +14,7 @@ type Contact struct {
 	From, To string
 	Host     string
 	Auth     smtp.Auth
+	Err      chan<- error
 }
 
 type values struct {
@@ -38,7 +39,10 @@ func (c *Contact) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Form.Get("submit") != "" {
 		err := form.Parse(&v, r.Form)
 		if err == nil {
-			smtp.SendMail(c.Host, c.Auth, c.From, []string{c.To}, []byte(fmt.Sprintf("To: %s\nFrom: %s\nSubject: Message Received\n\nName: %s\nEmail: %s\nPhone: %s\nSubject: %s\nMessage: %s", c.To, c.From, v.Name, v.Email, v.Phone, v.Subject, v.Message)))
+			err = smtp.SendMail(c.Host, c.Auth, c.From, []string{c.To}, []byte(fmt.Sprintf("To: %s\nFrom: %s\nSubject: Message Received\n\nName: %s\nEmail: %s\nPhone: %s\nSubject: %s\nMessage: %s", c.To, c.From, v.Name, v.Email, v.Phone, v.Subject, v.Message)))
+			if c.Err != nil && err != nil {
+				c.Err <- err
+			}
 			v.Done = true
 		} else {
 			v.Errors = err.(form.Errors)
