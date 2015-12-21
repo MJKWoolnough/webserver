@@ -150,9 +150,15 @@ func Close() error {
 	}
 	stopped = true
 	if started {
-		err := proxyHTTPSocket.Close()
-		if e := proxyHTTPSSocket.Close(); e != nil {
-			return e
+		var err error
+		if proxyHTTPSocket != nil {
+			err = proxyHTTPSocket.Close()
+		}
+		if proxyHTTPSSocket != nil {
+			e := proxyHTTPSSocket.Close()
+			if err == nil {
+				err = e
+			}
 		}
 		return err
 	}
