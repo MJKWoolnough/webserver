@@ -14,13 +14,14 @@ import (
 )
 
 type Site struct {
-	Name      string
-	Default   bool
-	Aliases   []string
-	Cmd       string
-	Arguments []string
-	Env       []string
-	Uid, Gid  uint32
+	Name       string
+	Default    bool
+	Aliases    []string
+	Cmd        string
+	Arguments  []string
+	WorkingDir string
+	Env        []string
+	Uid, Gid   uint32
 }
 
 type Config struct {
@@ -74,6 +75,7 @@ func main() {
 
 	for _, site := range config.Sites {
 		cmd := exec.Command(site.Cmd, site.Arguments...)
+		cmd.Dir = site.WorkingDir
 		cmd.Env = site.Env
 		if site.Uid != 0 && site.Gid != 0 {
 			cmd.SysProcAttr = &syscall.SysProcAttr{
