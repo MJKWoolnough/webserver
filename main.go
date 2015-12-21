@@ -126,7 +126,7 @@ func main() {
 	case <-cc:
 	default:
 		logger.Println(err)
-		close(cc)
+		cc <- struct{}{}
 	}
 	<-cc
 }
