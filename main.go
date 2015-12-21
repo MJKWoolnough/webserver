@@ -74,6 +74,8 @@ func main() {
 	}
 	p := proxy.New(http, https)
 
+	cmds := make([]*exec.Cmd, 0, len(config.Sites))
+
 	for _, site := range config.Sites {
 		cmd := exec.Command(site.Cmd, site.Arguments...)
 		cmd.Dir = site.WorkingDir
@@ -97,6 +99,7 @@ func main() {
 			p.Default(host)
 		}
 		host.AddAliases(site.Aliases...)
+		cmds = append(cmds, cmd)
 	}
 
 	cc := make(chan struct{})
@@ -129,4 +132,9 @@ func main() {
 		cc <- struct{}{}
 	}
 	<-cc
+	logger.Println("Waiting for clients to close")
+	for _, cmd := range cmds {
+		cmd.Wait()
+	}
+	logger.Println("done")
 }
