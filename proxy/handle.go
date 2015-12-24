@@ -55,6 +55,7 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 	}
 
 	if readLength < 0 {
+		c.Write(BadRequest)
 		return
 	}
 
@@ -177,7 +178,6 @@ func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
 	for readLength < MaxHeaderSize {
 		n, err := c.Read(char)
 		if err != nil {
-			c.Write(BadRequest)
 			readLength = -1
 			return
 		}
