@@ -54,6 +54,10 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 		return
 	}
 
+	if readLength < 0 {
+		return
+	}
+
 	pos := strings.IndexByte(hostname, ':')
 	if pos >= 0 {
 		hostname = hostname[:pos]
@@ -73,6 +77,7 @@ func readEncrypted(c net.Conn, buf []byte) (hostname string, readLength int) {
 	recordHeader := buf[:5]
 	_, err := io.ReadFull(c, recordHeader)
 	if err != nil || recordHeader[0] == 0x80 {
+		readLength = -1
 		return
 	}
 	readLength = 5
@@ -84,6 +89,7 @@ func readEncrypted(c net.Conn, buf []byte) (hostname string, readLength int) {
 	data := buf[5:readLength]
 	_, err = io.ReadFull(c, data)
 	if err != nil {
+		readLength = -1
 		return
 	}
 	buf = buf[:1+8+4+5+dataLength]
@@ -172,6 +178,7 @@ func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
 		n, err := c.Read(char)
 		if err != nil {
 			c.Write(BadRequest)
+			readLength = -1
 			return
 		}
 		if n != 1 {
