@@ -1,15 +1,22 @@
-package basket
+package main
 
 import "sync"
 
 type Item interface {
 	Price(quantity uint) uint
+	PreProcess() error
 	Process() error
 }
 
 type qItem struct {
 	quantity uint
 	Item
+}
+
+type Discount interface {
+}
+
+type Voucher interface {
 }
 
 type Basket struct {
