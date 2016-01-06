@@ -13,8 +13,8 @@ type templateFiles struct {
 }
 
 var (
-	addFiles    = make(chan templateFiles)
-	removeFiles = make(chan *Template)
+	addTemplate    = make(chan templateFiles)
+	removeTemplate = make(chan *Template)
 )
 
 func init() {
@@ -42,11 +42,11 @@ type Template struct {
 // watched Template, but also return an error. The template will not be useable
 // until it is sucessfully generated after a file change.
 func New(gen func() (*template.Template, error), files ...string) (t *Template, err error) {
-	t := new(Template)
+	t = new(Template)
 	t.t, err = gen()
 	t.gen = gen
 	if len(files) > 0 {
-		addFiles <- templateFiles{
+		addTemplate <- templateFiles{
 			t,
 			files,
 		}
@@ -80,17 +80,46 @@ func watchFiles() {
 	if err != nil {
 		panic(err)
 	}
+	files := make(map[string][]*Template)
 	for {
 		select {
 		case tf := <-addTemplate:
+			for _, file := range tf.files {
+				fs := files[file]
+				if len(fs) == 0 {
+					fsw.Add(file)
+				}
+				fs = append(fs, tf.Template)
+				files[file] = fs
+			}
 		case t := <-removeTemplate:
+			for name, ts := range files {
+				for i := 0; i < len(ts); i++ {
+					if ts[i] == t {
+						ts[i] = ts[len(ts)-1]
+						ts = ts[:len(ts)-1]
+						i--
+					}
+				}
+				if len(ts) == 0 {
+					delete(files, name)
+					fsw.Remove(name)
+				} else {
+					files[name] = ts
+				}
+			}
 		case e := <-fsw.Events:
-		case err := <-fsw.Errors:
+			ts := files[e.Name]
+			for _, t := range ts {
+				t.Regen()
+			}
+		case <-fsw.Errors:
+
 		}
 	}
 }
 
 // Unwatch stops all updates to the given template
 func Unwatch(t *Template) {
-	removeFiles <- t
+	removeTemplate <- t
 }
