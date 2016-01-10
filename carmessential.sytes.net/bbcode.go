@@ -188,7 +188,7 @@ func (b BBCodeExporter) export(t *bbcode.Tag, close bool) string {
 	if f, ok := b[strings.ToLower(t.Name)]; ok {
 		return f(t, close)
 	}
-	return defaultOut(t)
+	return defaultOut(t, close)
 }
 
 var bbCodeExporter = BBCodeToHTML{
@@ -215,7 +215,7 @@ var bbCodeExporter = BBCodeToHTML{
 			return "</a>"
 		}
 		if !t.Closed {
-			return defaultOut(t)
+			return defaultOut(t, close)
 		}
 		var (
 			u   url.URL
@@ -226,10 +226,10 @@ var bbCodeExporter = BBCodeToHTML{
 		} else if len(t.Inner) == 1 && t.Inner[0].Name == "@TEXT@" {
 			u, err = url.Parse(t.Inner[0].Attribute)
 		} else {
-			return defaultOut(t)
+			return defaultOut(t, close)
 		}
 		if err != nil {
-			return defaultOut(t)
+			return defaultOut(t, close)
 		}
 		return "<a href=\"" + template.HTMLEscapeString(u.String()) + "\">"
 	},
@@ -254,7 +254,7 @@ var bbCodeExporter = BBCodeToHTML{
 	"size": func(t *bbcode.Tag, close bool) string {
 		size, err := strconv.Atoi(t.Attribute)
 		if err != nil || size < 1 || size > 50 {
-			return defaultOut(t)
+			return defaultOut(t, close)
 		}
 		if close {
 			return "</span>"
@@ -273,7 +273,7 @@ var bbCodeExporter = BBCodeToHTML{
 			hex = colours[strings.ToLower(t.Attribute)]
 		}
 		if hex == "" {
-			return defaultOut(t)
+			return defaultOut(t, close)
 		}
 		if close {
 			return "</span>"
@@ -307,21 +307,21 @@ var bbCodeExporter = BBCodeToHTML{
 	},
 	"img": func(t *bbcode.Tag, close bool) string {
 		if len(t.Inner) != 1 || t.Inner[0].Name != "@TEXT@" {
-			return defaultOut(t)
+			return defaultOut(t, close)
 		}
 		if close {
 			return ""
 		}
 		u, err := url.Parse(t.Inner[0].Attribute)
 		if err != nil {
-			return defaultOut(t)
+			return defaultOut(t, close)
 		}
 		return
 	},
 	"font": func(t *bbcode.Tag, close bool) string {
 		font := fonts[t.Attribute]
 		if font == "" {
-			return defaultOut(t)
+			return defaultOut(t, close)
 		}
 		if close {
 			return "</span>"
@@ -403,11 +403,11 @@ var bbCodeExporter = BBCodeToHTML{
 	},
 }
 
-func defaultOut(t *bbcode.Tag) string {
-	out := t.BBCode()
-	t.Inner = nil
-	t.Closed = false
-	return out
+func defaultOut(t *bbcode.Tag, close bool) string {
+	if close {
+		return bbcode.BBCodeConverter.Open(t)
+	}
+	return bbcode.BBCodeConverter.Close(t)
 }
 
 func bbCodeToHTML(text string) template.HTML {
