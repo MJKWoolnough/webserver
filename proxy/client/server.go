@@ -70,6 +70,15 @@ func SetupTLS(s *http.Server, certFile, keyFile string) error {
 	return Setup(s)
 }
 
+func SetupTest(net, laddr string) error {
+	l, err := net.Listen(net, laddr)
+	if err != nil {
+		return err
+	}
+	proxyHTTPSocket = l
+	return nil
+}
+
 func run() {
 	var wg sync.WaitGroup
 	mu.Lock()
