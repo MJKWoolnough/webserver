@@ -70,8 +70,8 @@ func SetupTLS(s *http.Server, certFile, keyFile string) error {
 	return Setup(s)
 }
 
-func SetupTest(net, laddr string) error {
-	l, err := net.Listen(net, laddr)
+func SetupTest(lnet, laddr string) error {
+	l, err := net.Listen(lnet, laddr)
 	if err != nil {
 		return err
 	}
