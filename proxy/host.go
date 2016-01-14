@@ -7,6 +7,7 @@ import (
 	"sync"
 )
 
+// Host represents a single host and its aliases
 type Host struct {
 	proxy *Proxy
 
@@ -16,6 +17,8 @@ type Host struct {
 	httpTransfer, httpsTransfer *transfer
 }
 
+// NewHost creates a new Host from the given command, setting up the proxied
+// connections and running the command
 func (p *Proxy) NewHost(c *exec.Cmd) (*Host, error) {
 	h := &Host{
 		cmd:   c,
@@ -74,6 +77,7 @@ func (h *Host) setupCmd(c *exec.Cmd) (*transfer, *transfer, error) {
 	return http, https, nil
 }
 
+// AddAliases simply adds aliases to the host
 func (h *Host) AddAliases(names ...string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -93,6 +97,7 @@ NameLoop:
 	return nil
 }
 
+// RemoveAlias removes an alias from a host
 func (h *Host) RemoveAlias(names ...string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -110,6 +115,7 @@ NameLoop:
 	return nil
 }
 
+// Aliases returns a list of the hosts aliases
 func (h *Host) Aliases() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -118,6 +124,7 @@ func (h *Host) Aliases() []string {
 	return s
 }
 
+// Restart will restart the host
 func (h *Host) Restart() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -134,6 +141,7 @@ func (h *Host) Restart() error {
 	return nil
 }
 
+// Stop will stop the host
 func (h *Host) Stop() error {
 	if h.proxy.IsDefault(h) {
 		select {
@@ -162,6 +170,8 @@ func (h *Host) Stop() error {
 	return err
 }
 
+// Replace stops the current host executeable and starts the given command in
+// its place
 func (h *Host) Replace(c *exec.Cmd) error {
 	http, https, err := h.setupCmd(c)
 	if err != nil {
@@ -186,6 +196,14 @@ func (h *Host) getTransfer(encrypted bool) *transfer {
 	return h.httpTransfer
 }
 
+// Errors
+var (
+	ErrIsDefault   = errors.New("host is default")
+	ErrProxyClosed = errors.New("proxy closed")
+)
+
+// ErrAliasInUse is an error returned when trying to give a host an alias
+// already in use by another host
 type ErrAliasInUse struct {
 	Name string
 }
@@ -194,6 +212,8 @@ func (e ErrAliasInUse) Error() string {
 	return "server alias already in use: " + e.Name
 }
 
+// ErrUnknownAlias is an error returned when trying to remove an alias from a
+// host where it is not set
 type ErrUnknownAlias struct {
 	Name string
 }
@@ -201,8 +221,3 @@ type ErrUnknownAlias struct {
 func (e ErrUnknownAlias) Error() string {
 	return "server alias not assigned to this host: " + e.Name
 }
-
-var (
-	ErrIsDefault   = errors.New("host is default")
-	ErrProxyClosed = errors.New("proxy closed")
-)

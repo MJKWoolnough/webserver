@@ -8,8 +8,10 @@ import (
 	"sync"
 )
 
+// MaxHeaderSize represents the maximum size that the proxy will look throught to find a Host header
 const MaxHeaderSize = 8 << 10 // 8KB
 
+// Two preconstructed responses to certain errors
 var (
 	HeadersTooLarge = []byte("HTTP/1.0 413\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
 	BadRequest      = []byte("HTTP/1.0 400\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
