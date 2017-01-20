@@ -41,6 +41,9 @@ func init() {
 	// setup signals
 }
 
+// Setup will setup the client with the given http Server.
+//
+// This is optional as it will use the http DefaultServer by default
 func Setup(s *http.Server) error {
 	if started {
 		return ErrRunning
@@ -55,6 +58,7 @@ func Setup(s *http.Server) error {
 	return nil
 }
 
+// SetupTLS is used to setup the http Server and tls information
 func SetupTLS(s *http.Server, certFile, keyFile string) error {
 	if started {
 		return ErrRunning
@@ -68,6 +72,19 @@ func SetupTLS(s *http.Server, certFile, keyFile string) error {
 		}
 	}
 	return Setup(s)
+}
+
+// SetupTest will bypass the proxy and create a listener itself from the given
+// details.
+//
+// Useful when testing a server and don't want to run the full proxy to do so
+func SetupTest(lnet, laddr string) error {
+	l, err := net.Listen(lnet, laddr)
+	if err != nil {
+		return err
+	}
+	proxyHTTPSocket = l
+	return nil
 }
 
 func run() {
@@ -107,6 +124,8 @@ func run() {
 	close(wait)
 }
 
+// Run starts the client and blocks until the client stops, returning the error
+// if any
 func Run() error {
 	mu.RLock()
 	s1 := started
@@ -122,6 +141,7 @@ func Run() error {
 	return <-wait
 }
 
+// Start starts the client and returns immediately
 func Start() error {
 	mu.RLock()
 	s1 := started
@@ -137,6 +157,7 @@ func Start() error {
 	return nil
 }
 
+// Wait waits for the client to stop and returns any error
 func Wait() error {
 	mu.RLock()
 	s := started
@@ -149,6 +170,7 @@ func Wait() error {
 	return err
 }
 
+// Close closes all open proxied listeners and stop the client
 func Close() error {
 	mu.Lock()
 	defer mu.Unlock()

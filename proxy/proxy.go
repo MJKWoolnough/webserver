@@ -6,6 +6,7 @@ import (
 	"sync"
 )
 
+// Proxy repsents a listener that will proxy connections to hosts
 type Proxy struct {
 	http, https net.Listener
 
@@ -18,6 +19,7 @@ type Proxy struct {
 	defaultHost *Host
 }
 
+// New creates a new Proxy will optional http and https listeners
 func New(http, https net.Listener) *Proxy {
 	if http == nil && https == nil {
 		return nil
@@ -30,6 +32,8 @@ func New(http, https net.Listener) *Proxy {
 	}
 }
 
+// Default sets the default host, one which will be used if a host cannot be
+// determined from the headers
 func (p *Proxy) Default(h *Host) error {
 	if h.proxy != p {
 		return ErrInvalidHost
@@ -40,6 +44,7 @@ func (p *Proxy) Default(h *Host) error {
 	return nil
 }
 
+// IsDefault returns whether the given host is currently the default
 func (p *Proxy) IsDefault(h *Host) bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -75,6 +80,7 @@ func (p *Proxy) closeHosts() {
 	}
 }
 
+// Run starts the proxy and waits until it is closed to return any errors
 func (p *Proxy) Run() error {
 	if p.started {
 		return ErrRunning
@@ -85,6 +91,7 @@ func (p *Proxy) Run() error {
 	return p.runConns()
 }
 
+// Start starts the proxy and returns immediately
 func (p *Proxy) Start() error {
 	if p.started {
 		return ErrRunning
@@ -96,6 +103,7 @@ func (p *Proxy) Start() error {
 	return nil
 }
 
+// Wait will block until the proxy is stopped
 func (p *Proxy) Wait() error {
 	if !p.started {
 		return ErrNotRunning

@@ -68,4 +68,6 @@ func (t *transfer) Close() error {
 }
 
 // Errors
-var ErrBadSocket = errors.New("bad socket type")
+var (
+	ErrBadSocket = errors.New("bad socket type")
+)
