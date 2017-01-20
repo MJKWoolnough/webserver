@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"syscall"
+	"sync"
 
 	"github.com/MJKWoolnough/webserver/proxy"
 )
@@ -133,9 +134,15 @@ func main() {
 	}
 	<-cc
 	logger.Println("Waiting for clients to close")
+	var wg sync.WaitGroup
+	wg.Add(len(cmds))
 	for _, cmd := range cmds {
-		cmd.Process.Signal(os.Interrupt)
-		cmd.Wait()
+		go func(cmd *exec.Cmd) {
+			cmd.Process.Signal(os.Interrupt)
+			cmd.Wait()
+			wg.Done()
+		}(cmd)
 	}
+	wg.Wait()
 	logger.Println("done")
 }
