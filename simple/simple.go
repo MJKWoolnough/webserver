@@ -11,6 +11,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/MJKWoolnough/httpgzip"
 	"github.com/MJKWoolnough/webserver/contact"
 	"github.com/MJKWoolnough/webserver/proxy/client"
 )
@@ -57,7 +58,7 @@ func main() {
 			Err:      ec,
 		})
 	}
-	http.Handle("/", http.FileServer(http.Dir(*fileRoot)))
+	http.Handle("/", httpgzip.FileServer(http.Dir(*fileRoot)))
 
 	cc := make(chan struct{})
 	go func() {
