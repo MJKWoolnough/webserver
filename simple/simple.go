@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/MJKWoolnough/httpgzip"
+	"github.com/MJKWoolnough/httplog"
 	"github.com/MJKWoolnough/webserver/contact"
 	"github.com/MJKWoolnough/webserver/proxy/client"
 )
@@ -20,6 +21,7 @@ var (
 	contactForm = flag.Bool("c", false, "enable a contact form at /contact.html")
 	fileRoot    = flag.String("r", "", "root of http filesystem")
 	logName     = flag.String("n", "", "name for logging")
+	logFile     = flag.String("l", "", "filename for request logging")
 	logger      *log.Logger
 )
 
@@ -58,7 +60,19 @@ func main() {
 			Err:      ec,
 		})
 	}
-	http.Handle("/", httpgzip.FileServer(http.Dir(*fileRoot)))
+	h := httpgzip.FileServer(http.Dir(*fileRoot))
+	var lFile *os.File
+	if *logFile != "" {
+		var err error
+		lFile, err = os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			logger.Printf("Error appending to log file: %s\n", err)
+		} else {
+			h = httplog.Wrap(h, httplog.NewWriteLogger(lFile, httplog.DefaultFormat))
+		}
+
+	}
+	http.Handle("/", h)
 
 	cc := make(chan struct{})
 	go func() {
@@ -78,6 +92,9 @@ func main() {
 	}()
 
 	err := client.Run()
+	if lFile != nil {
+		lFile.Close()
+	}
 
 	select {
 	case <-cc:
