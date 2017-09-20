@@ -60,19 +60,31 @@ func main() {
 			Err:      ec,
 		})
 	}
-	h := httpgzip.FileServer(http.Dir(*fileRoot))
-	var lFile *os.File
+	http.Handle("/", httpgzip.FileServer(http.Dir(*fileRoot)))
+	var (
+		lFile  *os.File
+		server = &http.Server{
+			Handler:  http.DefaultServeMux,
+			ErrorLog: logger,
+		}
+	)
 	if *logFile != "" {
 		var err error
 		lFile, err = os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			logger.Printf("Error appending to log file: %s\n", err)
 		} else {
-			h = httplog.Wrap(h, httplog.NewWriteLogger(lFile, httplog.DefaultFormat))
+			lr, err := httplog.NewWriteLogger(lFile, httplog.DefaultFormat)
+			if err != nil {
+				logger.Fatalf("error starting request logging: %s\n", err)
+			}
+			server.Handler = httplog.Wrap(http.DefaultServeMux, lr)
 		}
 
 	}
-	http.Handle("/", h)
+	if err := client.Setup(server); err != nil {
+		logger.Fatalf("error setting up server: %s\n", err)
+	}
 
 	cc := make(chan struct{})
 	go func() {
@@ -90,7 +102,6 @@ func main() {
 		client.Wait()
 		close(cc)
 	}()
-
 	err := client.Run()
 	if lFile != nil {
 		lFile.Close()
