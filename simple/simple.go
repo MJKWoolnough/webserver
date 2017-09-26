@@ -11,6 +11,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/MJKWoolnough/httpbuffer"
 	"github.com/MJKWoolnough/httpgzip"
 	"github.com/MJKWoolnough/httplog"
 	"github.com/MJKWoolnough/webserver/contact"
@@ -51,13 +52,16 @@ func main() {
 				logger.Println(<-ec)
 			}
 		}()
-		http.Handle("/contact.html", &contact.Contact{
-			Template: tmpl,
-			From:     from,
-			To:       to,
-			Host:     addr,
-			Auth:     smtp.PlainAuth("", username, password, addrMPort),
-			Err:      ec,
+		http.Handle("/contact.html", &httpbuffer.Handler{
+			&contact.Contact{
+				Template: tmpl,
+				From:     from,
+				To:       to,
+				Host:     addr,
+				Auth:     smtp.PlainAuth("", username, password, addrMPort),
+				Err:      ec,
+			},
+			true,
 		})
 	}
 	http.Handle("/", httpgzip.FileServer(http.Dir(*fileRoot)))
