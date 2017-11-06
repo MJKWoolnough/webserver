@@ -35,17 +35,19 @@ func (v *values) ParserList() form.ParserList {
 
 func (c *Contact) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var v values
-	r.ParseForm()
-	if r.Form.Get("submit") != "" {
-		err := form.Parse(&v, r.Form)
-		if err == nil {
-			err = smtp.SendMail(c.Host, c.Auth, c.From, []string{c.To}, []byte(fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: Message Received\r\n\r\nName: %s\nEmail: %s\nPhone: %s\nSubject: %s\nMessage: %s", c.To, c.From, v.Name, v.Email, v.Phone, v.Subject, v.Message)))
-			if c.Err != nil && err != nil {
-				c.Err <- err
+	if r.Method == http.MethodPost {
+		r.ParseForm()
+		if r.Form.Get("submit") != "" {
+			err := form.Parse(&v, r.PostForm)
+			if err == nil {
+				err = smtp.SendMail(c.Host, c.Auth, c.From, []string{c.To}, []byte(fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: Message Received\r\n\r\nName: %s\nEmail: %s\nPhone: %s\nSubject: %s\nMessage: %s", c.To, c.From, v.Name, v.Email, v.Phone, v.Subject, v.Message)))
+				if c.Err != nil && err != nil {
+					c.Err <- err
+				}
+				v.Done = true
+			} else {
+				v.Errors = err.(form.Errors)
 			}
-			v.Done = true
-		} else {
-			v.Errors = err.(form.Errors)
 		}
 	}
 	c.Template.Execute(w, &v)
