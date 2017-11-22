@@ -61,7 +61,6 @@ func main() {
 				Auth:     smtp.PlainAuth("", username, password, addrMPort),
 				Err:      ec,
 			},
-			true,
 		})
 	}
 	http.Handle("/", httpgzip.FileServer(http.Dir(*fileRoot)))
