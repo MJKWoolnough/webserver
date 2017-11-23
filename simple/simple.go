@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/MJKWoolnough/httpbuffer"
+	_ "github.com/MJKWoolnough/httpbuffer/deflate"
+	_ "github.com/MJKWoolnough/httpbuffer/gzip"
 	"github.com/MJKWoolnough/httpgzip"
 	"github.com/MJKWoolnough/httplog"
 	"github.com/MJKWoolnough/webserver/contact"
