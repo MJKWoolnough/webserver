@@ -62,6 +62,8 @@ func (l *listener) Accept() (net.Conn, error) {
 	c, err := net.FileConn(os.NewFile(uintptr(fd[0]), ""))
 	if err != nil {
 		return nil, err
+	} else if c == nil {
+		return nil, ErrInvalidFDs
 	}
 	if ka, ok := c.(keepAlive); ok {
 		ka.SetKeepAlive(true)
@@ -121,6 +123,38 @@ func (c *conn) Close() error {
 	connClose(nil)
 	c.closed = true
 	return c.Conn.Close()
+}
+
+func (c *conn) RemoteAddr() net.Addr {
+	if c.Conn == nil {
+		return fakeAddr{}
+	}
+	r := c.Conn.RemoteAddr()
+	if r == nil {
+		return fakeAddr{}
+	}
+	return r
+}
+
+func (c *conn) LocalAddr() net.Addr {
+	if c.Conn == nil {
+		return fakeAddr{}
+	}
+	l := c.Conn.LocalAddr()
+	if l == nil {
+		return fakeAddr{}
+	}
+	return l
+}
+
+type fakeAddr struct{}
+
+func (fakeAddr) Network() string {
+	return ""
+}
+
+func (fakeAddr) String() string {
+	return ""
 }
 
 // Errors
