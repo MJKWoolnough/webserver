@@ -179,9 +179,12 @@ func Close() error {
 	}
 	stopped = true
 	if started {
-		var err error
+		err := server.Close()
 		if proxyHTTPSocket != nil {
-			err = proxyHTTPSocket.Close()
+			e := proxyHTTPSocket.Close()
+			if err == nil {
+				err = e
+			}
 		}
 		if proxyHTTPSSocket != nil {
 			e := proxyHTTPSSocket.Close()
