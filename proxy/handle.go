@@ -6,6 +6,9 @@ import (
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/MJKWoolnough/byteio"
+	"github.com/MJKWoolnough/memio"
 )
 
 // MaxHeaderSize represents the maximum size that the proxy will look throught to find a Host header
@@ -19,7 +22,7 @@ var (
 
 var pool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, MaxHeaderSize+1)
+		return make(memio.Buffer, MaxHeaderSize+1)
 	},
 }
 
@@ -39,7 +42,7 @@ func (p *Proxy) run(l net.Listener, encrypted bool) error {
 }
 
 func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
-	buf := pool.Get().([]byte)
+	buf := pool.Get().(memio.Buffer)
 	defer pool.Put(buf)
 	defer c.Close()
 	var (
@@ -76,99 +79,106 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 	t.Transfer(c, buf[:readLength])
 }
 
-func readEncrypted(c net.Conn, buf []byte) (hostname string, readLength int) {
-	recordHeader := buf[:5]
-	_, err := io.ReadFull(c, recordHeader)
-	if err != nil || recordHeader[0] == 0x80 {
-		readLength = -1
-		return
-	}
-	readLength = 5
-	dataLength := int(recordHeader[3])<<8 | int(recordHeader[4])
-	if dataLength < 42 || dataLength > MaxHeaderSize {
-		return
-	}
-	readLength += dataLength
-	data := buf[5:readLength]
-	_, err = io.ReadFull(c, data)
+func readEncrypted(c net.Conn, buf memio.Buffer) (string, int) {
+	_, err := io.ReadFull(c, buf[:5])
 	if err != nil {
-		readLength = -1
-		return
+		return "", -1
 	}
-	buf = buf[:1+8+4+5+dataLength]
-
-	sessionIDLen := int(data[38])
-	if sessionIDLen > 32 || len(data) < 39+int(sessionIDLen) {
-		return
+	r := byteio.StickyBigEndianReader{
+		Reader: &buf,
 	}
-	data = data[39+sessionIDLen:]
-	if len(data) < 2 {
-		return
+	if r.ReadUint8() != 22 {
+		//not a handshake, error out
+		return "", -1
 	}
 
-	cipherSuiteLen := int(data[0])<<8 | int(data[1])
-	if cipherSuiteLen%2 == 1 || len(data) < 2+cipherSuiteLen {
-		return
-	}
-	data = data[2+cipherSuiteLen:]
+	buf = buf[1:] // skip major version
+	buf = buf[1:] // skip minor version
 
-	if len(data) < 1 {
-		return
-	}
-	compressionMethodsLen := int(data[0])
-	if len(data) < 1+compressionMethodsLen {
-		return
-	}
-	data = data[1+compressionMethodsLen:]
+	length := r.ReadUint16()
 
-	if len(data) > 0 {
-		if len(data) < 2 {
-			return
+	if len(buf) < int(length) {
+		return "", -1
+	} else {
+		buf = buf[:length]
+	}
+	_, err = io.ReadFull(c, buf)
+	if err != nil {
+		return "", -1
+	}
+
+	if r.ReadUint8() != 1 {
+		// not a client_hello, error out
+		return "", -1
+	}
+
+	l := int(r.ReadUint24())
+	if l != len(buf) {
+		// incorrect length
+		return "", -1
+	}
+
+	buf = buf[1:] // skip major version
+	buf = buf[1:] // skip minor version
+
+	buf = buf[4:]  // skip gmt_unix_time
+	buf = buf[28:] // skip random_bytes
+
+	sessionLength := r.ReadUint8()
+	if sessionLength > 32 || len(buf) < int(sessionLength) {
+		// invalid length
+		return "", -1
+	}
+	buf = buf[sessionLength:] // skip session id
+
+	cipherSuiteLength := r.ReadUint16()
+	if cipherSuiteLength == 0 || len(buf) < int(cipherSuiteLength) {
+		// invalid length
+		return "", -1
+	}
+	buf = buf[cipherSuiteLength:] // skip cipher suites
+
+	compressionMethodLength := r.ReadUint8()
+	if compressionMethodLength < 1 {
+		// invalid length
+		return "", -1
+	}
+	buf = buf[compressionMethodLength:] // skip compression methods
+
+	extsLength := r.ReadUint16()
+	if len(buf) < int(extsLength) {
+		// invalid length
+		return "", -1
+	}
+	buf = buf[:extsLength]
+
+	for len(buf) > 0 {
+		extType := r.ReadUint16()
+		extLength := r.ReadUint16()
+		if len(buf) < int(extLength) {
+			// invalid length
+			return "", -1
 		}
-		extensionsLength := int(data[0])<<8 | int(data[1])
-		if extensionsLength != len(data) {
-			return
-		}
-	ExtLoop:
-		for len(data) != 0 {
-			if len(data) < 4 {
-				return
+		if extType == 0 { // server_name
+			l := r.ReadUint16()
+			if l != extLength-2 {
+				// invalid length
+				return "", -1
 			}
-			extension := uint16(data[0])<<8 | uint16(data[1])
-			length := int(data[2])<<8 | int(data[3])
-			data = data[4:]
-			if len(data) < length {
-				return
+
+			buf = buf[1:] // skip name_type
+
+			nameLength := r.ReadUint16()
+			if len(buf) < int(nameLength) {
+				// invalid length
+				return "", -1
 			}
-			if extension == 0 { //serverName
-				d := data[:length]
-				if len(d) < 2 {
-					return
-				}
-				namesLen := int(d[0])<<8 | int(d[1])
-				d = d[2:]
-				if len(d) != namesLen {
-					return
-				}
-				for len(d) > 0 {
-					if len(d) < 3 {
-					}
-					nameType := d[0]
-					nameLen := int(d[1])<<8 | int(d[2])
-					d = d[3:]
-					if len(d) < nameLen {
-						return
-					}
-					if nameType == 0 {
-						hostname = string(d[:nameLen])
-						break ExtLoop
-					}
-					d = d[nameLen:]
-				}
-			}
+			return string(buf[:nameLength]), 5 + int(length)
+		} else {
+			buf = buf[extLength:]
 		}
 	}
-	return
+	return "", 5 + int(length)
 }
 
 func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
