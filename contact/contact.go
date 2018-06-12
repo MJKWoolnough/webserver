@@ -1,4 +1,4 @@
-package contact
+package contact // import "vimagination.zapto.org/webserver/contact"
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/smtp"
 
-	"github.com/MJKWoolnough/form"
+	"vimagination.zapto.org/form"
 )
 
 type Contact struct {

@@ -1,4 +1,4 @@
-package client
+package client // import "vimagination.zapto.org/webserver/proxy/client"
 
 import (
 	"encoding/binary"

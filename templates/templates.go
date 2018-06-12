@@ -1,4 +1,4 @@
-package templates
+package templates // import "vimagination.zapto.org/webserver/templates"
 
 import (
 	"html/template"

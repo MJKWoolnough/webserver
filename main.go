@@ -1,4 +1,4 @@
-package main
+package main // import "vimagination.zapto.org/webserver"
 
 import (
 	"encoding/json"
@@ -8,10 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"syscall"
 	"sync"
+	"syscall"
 
-	"github.com/MJKWoolnough/webserver/proxy"
+	"vimagination.zapto.org/webserver/proxy"
 )
 
 type Site struct {

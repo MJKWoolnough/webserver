@@ -1,4 +1,4 @@
-package proxy
+package proxy // import "vimagination.zapto.org/webserver/proxy"
 
 import (
 	"bytes"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/MJKWoolnough/byteio"
-	"github.com/MJKWoolnough/memio"
+	"vimagination.zapto.org/byteio"
+	"vimagination.zapto.org/memio"
 )
 
 // MaxHeaderSize represents the maximum size that the proxy will look throught to find a Host header
@@ -181,10 +181,11 @@ func readEncrypted(c net.Conn, buf memio.Buffer) (string, int) {
 	return "", 5 + int(length)
 }
 
-func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
+func readHTTP(c net.Conn, buf []byte) (string, int) {
 	var (
-		last int
-		char = make([]byte, 1, 1)
+		last       int
+		char       = make([]byte, 1, 1)
+		readLength int
 	)
 	buf = buf[:0]
 	for readLength < MaxHeaderSize {
@@ -213,8 +214,7 @@ func readHTTP(c net.Conn, buf []byte) (hostname string, readLength int) {
 		if headerName := bytes.TrimSpace(line[:p]); len(headerName) != 4 || headerName[0] != 'H' || headerName[1] != 'o' || headerName[2] != 's' || headerName[3] != 't' {
 			continue
 		}
-		hostname = string(bytes.TrimSpace(line[p+1:]))
-		break
+		return string(bytes.TrimSpace(line[p+1:])), readLength
 	}
 	return
 }

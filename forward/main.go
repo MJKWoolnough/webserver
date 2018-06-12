@@ -1,4 +1,4 @@
-package main
+package main // import "vimagination.zapto.org/webserver/forward"
 
 import (
 	"encoding/binary"

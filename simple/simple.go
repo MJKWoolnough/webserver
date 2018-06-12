@@ -1,6 +1,7 @@
-package main
+package main // import "vimagination.zapto.org/webserver/simple"
 
 import (
+	"crypto/tls"
 	"flag"
 	"html/template"
 	"log"
@@ -11,13 +12,14 @@ import (
 	"path"
 	"strings"
 
-	"github.com/MJKWoolnough/httpbuffer"
-	_ "github.com/MJKWoolnough/httpbuffer/deflate"
-	_ "github.com/MJKWoolnough/httpbuffer/gzip"
-	"github.com/MJKWoolnough/httpgzip"
-	"github.com/MJKWoolnough/httplog"
-	"github.com/MJKWoolnough/webserver/contact"
-	"github.com/MJKWoolnough/webserver/proxy/client"
+	"golang.org/x/crypto/acme/autocert"
+	"vimagination.zapto.org/httpbuffer"
+	_ "vimagination.zapto.org/httpbuffer/deflate"
+	_ "vimagination.zapto.org/httpbuffer/gzip"
+	"vimagination.zapto.org/httpgzip"
+	"vimagination.zapto.org/httplog"
+	"vimagination.zapto.org/webserver/contact"
+	"vimagination.zapto.org/webserver/proxy/client"
 )
 
 var (
@@ -25,8 +27,25 @@ var (
 	fileRoot    = flag.String("r", "", "root of http filesystem")
 	logName     = flag.String("n", "", "name for logging")
 	logFile     = flag.String("l", "", "filename for request logging")
+	serverName  = flag.String("s", "", "server name for HTTPS")
 	logger      *log.Logger
 )
+
+type http2https struct {
+	http.Handler
+}
+
+func (hh http2https) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.TLS == nil {
+		var url = "https://" + r.Host + r.URL.Path
+		if len(r.URL.RawQuery) != 0 {
+			url += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, url, http.StatusMovedPermanently)
+		return
+	}
+	hh.Handler.ServeHTTP(w, r)
+}
 
 func main() {
 	flag.Parse()
@@ -73,6 +92,18 @@ func main() {
 			ErrorLog: logger,
 		}
 	)
+	if *serverName != "" {
+		leManager := &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			Cache:      autocert.DirCache("./certcache/"),
+			HostPolicy: autocert.HostWhitelist(*serverName),
+		}
+		server.Handler = leManager.HTTPHandler(http2https{server.Handler})
+		server.TLSConfig = &tls.Config{
+			GetCertificate: leManager.GetCertificate,
+			NextProtos:     []string{"h2", "http/1.1"},
+		}
+	}
 	if *logFile != "" {
 		var err error
 		lFile, err = os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
