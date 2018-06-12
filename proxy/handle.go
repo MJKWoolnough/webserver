@@ -192,7 +192,7 @@ func readHTTP(c net.Conn, buf []byte) (string, int) {
 		n, err := c.Read(char)
 		if err != nil {
 			readLength = -1
-			return
+			return "", -1
 		}
 		if n != 1 {
 			continue
@@ -216,5 +216,5 @@ func readHTTP(c net.Conn, buf []byte) (string, int) {
 		}
 		return string(bytes.TrimSpace(line[p+1:])), readLength
 	}
-	return
+	return "", -1
 }
