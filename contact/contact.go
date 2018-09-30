@@ -34,6 +34,7 @@ func (v *values) ParserList() form.ParserList {
 }
 
 func (c *Contact) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
 	var v values
 	if r.Method == http.MethodPost {
 		r.ParseForm()
