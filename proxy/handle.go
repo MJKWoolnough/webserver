@@ -99,9 +99,8 @@ func readEncrypted(c net.Conn, buf memio.Buffer) (string, int) {
 
 	if len(buf) < int(length) {
 		return "", -1
-	} else {
-		buf = buf[:length]
 	}
+	buf = buf[:length]
 	_, err = io.ReadFull(c, buf)
 	if err != nil {
 		return "", -1
@@ -174,9 +173,8 @@ func readEncrypted(c net.Conn, buf memio.Buffer) (string, int) {
 				return "", -1
 			}
 			return string(buf[:nameLength]), 5 + int(length)
-		} else {
-			buf = buf[extLength:]
 		}
+		buf = buf[extLength:]
 	}
 	return "", 5 + int(length)
 }
