@@ -16,7 +16,6 @@ var (
 
 	mu               sync.RWMutex
 	started, stopped bool
-	serverError      error
 
 	wait = make(chan error)
 )
