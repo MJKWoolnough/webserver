@@ -79,7 +79,7 @@ func (p *Proxy) handleConn(c net.Conn, encrypted bool) {
 	t.Transfer(c, buf[:readLength])
 }
 
-func readEncrypted(c net.Conn, buf memio.Buffer) (string, int) {
+func readEncrypted(c io.Reader, buf memio.Buffer) (string, int) {
 	_, err := io.ReadFull(c, buf[:5])
 	if err != nil {
 		return "", -1
@@ -179,7 +179,7 @@ func readEncrypted(c net.Conn, buf memio.Buffer) (string, int) {
 	return "", 5 + int(length)
 }
 
-func readHTTP(c net.Conn, buf []byte) (string, int) {
+func readHTTP(c io.Reader, buf []byte) (string, int) {
 	var (
 		last       int
 		char       = make([]byte, 1, 1)
