@@ -9,6 +9,7 @@ import (
 	"vimagination.zapto.org/form"
 )
 
+// Contact contains all of the variables required to create a 'Contact' form
 type Contact struct {
 	Template *template.Template
 	From, To string
